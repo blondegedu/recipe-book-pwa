@@ -113,6 +113,11 @@ class RecipeHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(HTML.encode())
+        elif self.path == '/add-manual':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(MANUAL_FORM_HTML.encode())
         elif self.path == '/recipes':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -142,6 +147,29 @@ class RecipeHandler(BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
+        
+        elif self.path == '/add-manual-submit':
+            length = int(self.headers['Content-Length'])
+            data = json.loads(self.rfile.read(length))
+            
+            recipe = {
+                'title': data.get('title', 'Untitled Recipe'),
+                'category': data.get('category', 'Other'),
+                'ingredients': [i.strip() for i in data.get('ingredients', '').split('\n') if i.strip()],
+                'instructions': [i.strip() for i in data.get('instructions', '').split('\n') if i.strip()],
+                'notes': data.get('notes', ''),
+                'url': '',
+                'date': datetime.now().isoformat()
+            }
+            
+            recipes = load_recipes()
+            recipes.append(recipe)
+            save_recipes(recipes)
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True}).encode())
         
         elif self.path == '/set-notes':
             length = int(self.headers['Content-Length'])
@@ -212,6 +240,195 @@ class RecipeHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+MANUAL_FORM_HTML = '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Recipe Manually - Recipe Book</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Georgia, serif; background: #f9f7f4; padding: 20px; overflow-x: hidden; }
+        .container { max-width: 800px; margin: 0 auto; width: 100%; }
+        h1 { color: #2d5016; margin-bottom: 20px; cursor: pointer; word-wrap: break-word; }
+        .form-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 100%; }
+        label { display: block; color: #2d5016; font-weight: bold; margin-top: 20px; margin-bottom: 5px; }
+        input, select, textarea { width: 100%; max-width: 100%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; font-family: Georgia, serif; box-sizing: border-box; }
+        textarea { min-height: 150px; resize: vertical; }
+        button { padding: 12px 24px; background: #f4d03f; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 20px; font-weight: bold; }
+        button:hover { background: #f1c40f; }
+        .help-text { font-size: 14px; color: #666; margin-top: 5px; }
+        .status { padding: 15px; border-radius: 4px; margin-top: 20px; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .form-container { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 onclick="window.location.href='/'" title="Back to main page">🍳 Recipe Book - Add Manually</h1>
+        
+        <div class="form-container">
+            <div style="margin-bottom: 20px; padding: 15px; background: #fff9e6; border-radius: 4px; border: 2px dashed #f4d03f;">
+                <strong style="color: #2d5016;">Quick Paste:</strong> Have a recipe copied? 
+                <button type="button" onclick="showQuickPaste()" style="padding: 8px 16px; margin-left: 10px;">Paste & Auto-Fill</button>
+            </div>
+            
+            <div id="quickPasteModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%;">
+                    <h2 style="color: #2d5016; margin-bottom: 15px;">Paste Your Recipe</h2>
+                    <textarea id="quickPasteText" placeholder="Paste the entire recipe here..." style="width: 100%; min-height: 300px; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-family: Georgia, serif;"></textarea>
+                    <div style="margin-top: 15px;">
+                        <button type="button" onclick="parseRecipe()" style="padding: 12px 24px; background: #f4d03f; color: #333; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Parse Recipe</button>
+                        <button type="button" onclick="closeQuickPaste()" style="padding: 12px 24px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <form id="manualForm">
+                <label for="title">Recipe Title *</label>
+                <input type="text" id="title" required placeholder="e.g., Chocolate Chip Cookies">
+                
+                <label for="category">Category</label>
+                <select id="category">
+                    <option value="Other">Other</option>
+                    <option value="Breakfast">Breakfast</option>
+                    <option value="Lunch">Lunch</option>
+                    <option value="Dinner">Dinner</option>
+                    <option value="Snack">Snack</option>
+                    <option value="Dessert">Dessert</option>
+                    <option value="Condiment">Condiment</option>
+                </select>
+                
+                <label for="ingredients">Ingredients *</label>
+                <textarea id="ingredients" required placeholder="Enter one ingredient per line:
+1 cup flour
+2 eggs
+1/2 cup sugar"></textarea>
+                <div class="help-text">One ingredient per line</div>
+                
+                <label for="instructions">Instructions *</label>
+                <textarea id="instructions" required placeholder="Enter one step per line:
+Preheat oven to 350°F
+Mix dry ingredients
+Add wet ingredients
+Bake for 20 minutes"></textarea>
+                <div class="help-text">One instruction per line</div>
+                
+                <label for="notes">Notes (optional)</label>
+                <textarea id="notes" style="min-height: 80px;" placeholder="Any additional notes..."></textarea>
+                
+                <button type="submit">Add Recipe</button>
+                <button type="button" onclick="window.location.href='/'" style="background: #6c757d; margin-left: 10px;">Cancel</button>
+            </form>
+            
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('manualForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = e.target.querySelector('button[type="submit"]');
+            const status = document.getElementById('status');
+            
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+            status.innerHTML = '';
+            
+            const data = {
+                title: document.getElementById('title').value,
+                category: document.getElementById('category').value,
+                ingredients: document.getElementById('ingredients').value,
+                instructions: document.getElementById('instructions').value,
+                notes: document.getElementById('notes').value
+            };
+            
+            try {
+                const res = await fetch('/add-manual-submit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                if (res.ok) {
+                    status.innerHTML = '<div class="status success">✅ Recipe added! Redirecting...</div>';
+                    setTimeout(() => window.location.href = '/', 1500);
+                } else {
+                    status.innerHTML = '<div class="status error">❌ Error adding recipe</div>';
+                    btn.disabled = false;
+                    btn.textContent = 'Add Recipe';
+                }
+            } catch (e) {
+                status.innerHTML = '<div class="status error">❌ Error: ' + e.message + '</div>';
+                btn.disabled = false;
+                btn.textContent = 'Add Recipe';
+            }
+        });
+        
+        function showQuickPaste() {
+            document.getElementById('quickPasteModal').style.display = 'block';
+        }
+        
+        function closeQuickPaste() {
+            document.getElementById('quickPasteModal').style.display = 'none';
+        }
+        
+        function parseRecipe() {
+            const text = document.getElementById('quickPasteText').value;
+            if (!text.trim()) return;
+            
+            const lines = text.split('\\n').map(l => l.trim()).filter(l => l);
+            
+            // Extract title (first non-empty line)
+            const title = lines[0] || 'Untitled Recipe';
+            document.getElementById('title').value = title;
+            
+            // Find ingredients section
+            let ingredientsStart = -1;
+            let ingredientsEnd = -1;
+            let instructionsStart = -1;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const lower = lines[i].toLowerCase();
+                if (lower.includes('ingredient') && ingredientsStart === -1) {
+                    ingredientsStart = i + 1;
+                } else if ((lower.includes('instruction') || lower.includes('direction') || lower.includes('step')) && instructionsStart === -1) {
+                    if (ingredientsStart !== -1 && ingredientsEnd === -1) {
+                        ingredientsEnd = i;
+                    }
+                    instructionsStart = i + 1;
+                }
+            }
+            
+            // Extract ingredients
+            if (ingredientsStart !== -1) {
+                const endIdx = ingredientsEnd !== -1 ? ingredientsEnd : (instructionsStart !== -1 ? instructionsStart - 1 : lines.length);
+                const ingredients = lines.slice(ingredientsStart, endIdx)
+                    .filter(l => !l.toLowerCase().includes('ingredient'))
+                    .join('\\n');
+                document.getElementById('ingredients').value = ingredients;
+            }
+            
+            // Extract instructions
+            if (instructionsStart !== -1) {
+                const instructions = lines.slice(instructionsStart)
+                    .filter(l => !l.toLowerCase().includes('instruction') && !l.toLowerCase().includes('direction'))
+                    .join('\\n');
+                document.getElementById('instructions').value = instructions;
+            }
+            
+            closeQuickPaste();
+        }
+    </script>
+</body>
+</html>'''
+
 HTML = '''<!DOCTYPE html>
 <html>
 <head>
@@ -221,39 +438,45 @@ HTML = '''<!DOCTYPE html>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Georgia, serif; background: #f9f7f4; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #2d5016; margin-bottom: 20px; }
+        body { font-family: Georgia, serif; background: #f9f7f4; padding: 20px; overflow-x: hidden; }
+        .container { max-width: 1200px; margin: 0 auto; width: 100%; }
+        h1 { color: #2d5016; margin-bottom: 20px; word-wrap: break-word; }
         .recipe-list { display: grid; gap: 20px; margin-top: 20px; }
-        .recipe-card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; cursor: pointer; }
+        .recipe-card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; cursor: pointer; max-width: 100%; }
         .recipe-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .recipe-card h2 { color: #2d5016; font-size: 22px; margin-bottom: 10px; }
-        .recipe-full { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 30px; margin-bottom: 20px; }
-        .recipe-full h2 { color: #2d5016; font-size: 28px; margin-bottom: 20px; }
+        .recipe-card h2 { color: #2d5016; font-size: 22px; margin-bottom: 10px; word-wrap: break-word; }
+        .recipe-full { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 30px; margin-bottom: 20px; max-width: 100%; overflow-wrap: break-word; }
+        .recipe-full h2 { color: #2d5016; font-size: 28px; margin-bottom: 20px; word-wrap: break-word; }
         .ingredients, .instructions { margin: 20px 0; }
         .ingredients h3, .instructions h3 { color: #2d5016; margin-bottom: 15px; }
-        .ingredients li { padding: 8px 0; }
-        .instructions li { padding: 10px 0; margin-bottom: 10px; }
+        .ingredients li { padding: 8px 0; word-wrap: break-word; }
+        .instructions li { padding: 10px 0; margin-bottom: 10px; word-wrap: break-word; }
         button { padding: 12px 24px; background: #f4d03f; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin: 10px 10px 10px 0; font-weight: bold; }
         button:hover { background: #f1c40f; }
         .btn-danger { background: #dc3545; color: white; }
         .btn-danger:hover { background: #c82333; }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .recipe-full { padding: 15px; }
+            button { padding: 10px 16px; font-size: 14px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 onclick="backToList()" style="cursor: pointer;">🍳 Recipe Book</h1>
         <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <input type="text" id="urlInput" placeholder="Paste recipe URL..." style="width: 70%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px;" />
+            <input type="text" id="urlInput" placeholder="Paste recipe URL..." style="width: 70%; max-width: 100%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; box-sizing: border-box;" />
             <button onclick="addRecipe()" id="addBtn">Add Recipe</button>
             <div id="status" style="margin-top: 10px;"></div>
-            <p style="margin-top: 10px; font-size: 14px; color: #666;">
-                If a URL doesn't work, try <a href="https://www.justtherecipe.com/" target="_blank" style="color: #8b4513;">JustTheRecipe.com</a> or <a href="https://video2recipe.com/" target="_blank" style="color: #8b4513;">Video2Recipe.com</a> first, then paste the result URL here.
+            <p style="margin-top: 10px; font-size: 14px; color: #666; word-wrap: break-word;">
+                If a URL doesn't work, try <a href="https://www.justtherecipe.com/" target="_blank" style="color: #8b4513;">JustTheRecipe.com</a> or <a href="https://video2recipe.com/" target="_blank" style="color: #8b4513;">Video2Recipe.com</a> first, then paste the result URL here.<br>
+                Or <a href="/add-manual" style="color: #2d5016; font-weight: bold;">add a recipe manually</a>.
             </p>
         </div>
         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <input type="text" id="searchBox" placeholder="Search recipes..." onkeyup="filterRecipes()" style="flex: 1; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px;" />
-            <select id="sortBox" onchange="filterRecipes()" style="padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; background: white;">
+            <input type="text" id="searchBox" placeholder="Search recipes..." onkeyup="filterRecipes()" style="flex: 1; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; min-width: 0; box-sizing: border-box;" />
+            <select id="sortBox" onchange="filterRecipes()" style="padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; background: white; box-sizing: border-box;">
                 <option value="date-newest">Newest First</option>
                 <option value="date-oldest">Oldest First</option>
                 <option value="alphabetical">A-Z</option>
