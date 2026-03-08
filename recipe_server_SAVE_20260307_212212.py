@@ -498,7 +498,7 @@ HTML = '''<!DOCTYPE html>
 if __name__ == '__main__':
     port = 8080
     server = HTTPServer(('0.0.0.0', port), RecipeHandler)
-    print(f'✅ Recipe Book Server Running on port {port}')
+    print(f'✅ Recipe Book Server Running on port {port} Test Printing!')
     try:
         server.serve_forever()
     except KeyboardInterrupt:
