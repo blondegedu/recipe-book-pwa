@@ -126,8 +126,8 @@ class RecipeHandler(BaseHTTPRequestHandler):
                 edit_html = EDIT_FORM_HTML.replace('{{RECIPE_INDEX}}', str(recipe_index))
                 edit_html = edit_html.replace('{{TITLE}}', recipe['title'])
                 edit_html = edit_html.replace('{{CATEGORY}}', recipe['category'])
-                edit_html = edit_html.replace('{{INGREDIENTS}}', '\\n'.join(recipe['ingredients']))
-                edit_html = edit_html.replace('{{INSTRUCTIONS}}', '\\n'.join(recipe['instructions']))
+                edit_html = edit_html.replace('{{INGREDIENTS}}', '\n'.join(recipe['ingredients']))
+                edit_html = edit_html.replace('{{INSTRUCTIONS}}', '\n'.join(recipe['instructions']))
                 edit_html = edit_html.replace('{{NOTES}}', recipe.get('notes', ''))
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
@@ -261,8 +261,8 @@ class RecipeHandler(BaseHTTPRequestHandler):
             if 0 <= index < len(recipes):
                 recipes[index]['title'] = data.get('title', '')
                 recipes[index]['category'] = data.get('category', 'Other')
-                recipes[index]['ingredients'] = [i.strip() for i in data.get('ingredients', '').split('\\n') if i.strip()]
-                recipes[index]['instructions'] = [i.strip() for i in data.get('instructions', '').split('\\n') if i.strip()]
+                recipes[index]['ingredients'] = [i.strip() for i in data.get('ingredients', '').split('\n') if i.strip()]
+                recipes[index]['instructions'] = [i.strip() for i in data.get('instructions', '').split('\n') if i.strip()]
                 recipes[index]['notes'] = data.get('notes', '')
                 save_recipes(recipes)
                 self.send_response(200)
