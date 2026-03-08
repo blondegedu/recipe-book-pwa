@@ -1,0 +1,130 @@
+═══════════════════════════════════════════════════════════════
+  RECIPE BOOK - GIT WORKFLOW CHEAT SHEET
+═══════════════════════════════════════════════════════════════
+
+📁 REPOSITORY
+--------------
+GitHub: https://github.com/blondegedu/recipe-book
+Linux Laptop: ~/RecipeBook-Dev
+Windows Desktop: C:\RecipeBook
+
+
+🔧 DEVELOPMENT WORKFLOW (Linux Laptop)
+----------------------------------------
+
+1. NAVIGATE TO PROJECT
+   cd ~/RecipeBook-Dev
+
+2. PULL LATEST CHANGES (if working from multiple places)
+   git pull
+
+3. MAKE YOUR EDITS
+   Edit recipe_server_SAVE_20260307_212212.py in your text editor
+
+4. TEST LOCALLY
+   python3 recipe_server_SAVE_20260307_212212.py
+   
+   Open browser: http://localhost:8080
+   Test your changes
+   Press Ctrl+C to stop server
+
+5. SAVE YOUR CHANGES TO GIT
+   git add .
+   git commit -m "Brief description of what you changed"
+   git push
+
+   Example commit messages:
+   - "Changed button color to blue"
+   - "Added new category: Soup"
+   - "Fixed search bug"
+
+
+🚀 DEPLOY TO PRODUCTION (Windows Desktop)
+-------------------------------------------
+
+1. STOP THE SERVER
+   Stop-Process -Name python -Force
+
+2. UPDATE THE CODE
+   cd C:\RecipeBook
+   git pull
+
+3. RESTART THE SERVER
+   C:\RecipeBook\start_recipe_server.vbs
+   tailscale serve 8080
+
+4. VERIFY IT'S RUNNING
+   Get-Process python
+   
+   Test in browser: https://recipebook.tail98c5aa.ts.net/
+
+
+📋 COMMON GIT COMMANDS
+-----------------------
+
+CHECK STATUS (see what files changed):
+   git status
+
+SEE WHAT CHANGED:
+   git diff
+
+VIEW COMMIT HISTORY:
+   git log --oneline
+
+UNDO UNCOMMITTED CHANGES:
+   git checkout -- filename.py
+
+PULL LATEST FROM GITHUB:
+   git pull
+
+PUSH TO GITHUB:
+   git push
+
+
+🔍 TROUBLESHOOTING
+-------------------
+
+"AUTHENTICATION FAILED" ON LINUX:
+   Use your Personal Access Token as password
+   Get new token: https://github.com/settings/tokens
+
+"MERGE CONFLICT":
+   This happens if you edited on both machines
+   1. git status (see which files conflict)
+   2. Open the file and look for <<<<<<< markers
+   3. Edit to keep what you want
+   4. git add filename
+   5. git commit -m "Resolved merge conflict"
+
+"CHANGES NOT SHOWING ON DESKTOP":
+   1. Make sure you ran git push on laptop
+   2. Make sure you ran git pull on desktop
+   3. Make sure you restarted the server on desktop
+
+SERVER WON'T START ON DESKTOP:
+   Check if already running: Get-Process python
+   Kill it: Stop-Process -Name python -Force
+   Check for Python errors in the code
+
+
+💡 BEST PRACTICES
+------------------
+
+✓ Always test on laptop before pushing
+✓ Write clear commit messages
+✓ Pull before starting new work
+✓ Commit often (small changes are easier to track)
+✓ Don't edit directly on desktop (always use laptop → git → desktop)
+
+
+🌐 ACCESSING YOUR SITE
+-----------------------
+
+Production (from any device): https://recipebook.tail98c5aa.ts.net/
+Local testing on laptop: http://localhost:8080
+Local testing on desktop: http://localhost:8080
+
+
+═══════════════════════════════════════════════════════════════
+  Created: March 8, 2026
+═══════════════════════════════════════════════════════════════
