@@ -118,6 +118,24 @@ class RecipeHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             self.wfile.write(MANUAL_FORM_HTML.encode())
+        elif self.path.startswith('/edit/'):
+            recipe_index = int(self.path.split('/')[-1])
+            recipes = load_recipes()
+            if 0 <= recipe_index < len(recipes):
+                recipe = recipes[recipe_index]
+                edit_html = EDIT_FORM_HTML.replace('{{RECIPE_INDEX}}', str(recipe_index))
+                edit_html = edit_html.replace('{{TITLE}}', recipe['title'])
+                edit_html = edit_html.replace('{{CATEGORY}}', recipe['category'])
+                edit_html = edit_html.replace('{{INGREDIENTS}}', '\\n'.join(recipe['ingredients']))
+                edit_html = edit_html.replace('{{INSTRUCTIONS}}', '\\n'.join(recipe['instructions']))
+                edit_html = edit_html.replace('{{NOTES}}', recipe.get('notes', ''))
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(edit_html.encode())
+            else:
+                self.send_response(404)
+                self.end_headers()
         elif self.path == '/recipes':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -233,6 +251,28 @@ class RecipeHandler(BaseHTTPRequestHandler):
             else:
                 self.send_response(400)
                 self.end_headers()
+        
+        elif self.path == '/edit-submit':
+            length = int(self.headers['Content-Length'])
+            data = json.loads(self.rfile.read(length))
+            index = data.get('index', -1)
+            
+            recipes = load_recipes()
+            if 0 <= index < len(recipes):
+                recipes[index]['title'] = data.get('title', '')
+                recipes[index]['category'] = data.get('category', 'Other')
+                recipes[index]['ingredients'] = [i.strip() for i in data.get('ingredients', '').split('\\n') if i.strip()]
+                recipes[index]['instructions'] = [i.strip() for i in data.get('instructions', '').split('\\n') if i.strip()]
+                recipes[index]['notes'] = data.get('notes', '')
+                save_recipes(recipes)
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True}).encode())
+            else:
+                self.send_response(400)
+                self.end_headers()
+        
         else:
             self.send_response(404)
             self.end_headers()
@@ -425,6 +465,118 @@ Bake for 20 minutes"></textarea>
             
             closeQuickPaste();
         }
+    </script>
+</body>
+</html>'''
+
+EDIT_FORM_HTML = '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Recipe - Recipe Book</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Georgia, serif; background: #f9f7f4; padding: 20px; overflow-x: hidden; }
+        .container { max-width: 800px; margin: 0 auto; width: 100%; }
+        h1 { color: #2d5016; margin-bottom: 20px; cursor: pointer; word-wrap: break-word; }
+        .form-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 100%; }
+        label { display: block; color: #2d5016; font-weight: bold; margin-top: 20px; margin-bottom: 5px; }
+        input, select, textarea { width: 100%; max-width: 100%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; font-family: Georgia, serif; box-sizing: border-box; }
+        textarea { min-height: 150px; resize: vertical; }
+        button { padding: 12px 24px; background: #f4d03f; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 20px; font-weight: bold; }
+        button:hover { background: #f1c40f; }
+        .btn-cancel { background: #6c757d; color: white; margin-left: 10px; }
+        .btn-cancel:hover { background: #5a6268; }
+        .status { padding: 15px; border-radius: 4px; margin-top: 20px; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .form-container { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 onclick="window.location.href='/'" title="Back to main page">🍳 Recipe Book - Edit Recipe</h1>
+        
+        <div class="form-container">
+            <form id="editForm">
+                <input type="hidden" id="recipeIndex" value="{{RECIPE_INDEX}}">
+                
+                <label for="title">Recipe Title *</label>
+                <input type="text" id="title" required value="{{TITLE}}">
+                
+                <label for="category">Category *</label>
+                <select id="category" required>
+                    <option value="Breakfast">Breakfast</option>
+                    <option value="Lunch">Lunch</option>
+                    <option value="Dinner">Dinner</option>
+                    <option value="Snack">Snack</option>
+                    <option value="Dessert">Dessert</option>
+                    <option value="Condiment">Condiment</option>
+                    <option value="Other">Other</option>
+                </select>
+                
+                <label for="ingredients">Ingredients * (one per line)</label>
+                <textarea id="ingredients" required placeholder="1 cup flour&#10;2 eggs&#10;1/2 cup sugar">{{INGREDIENTS}}</textarea>
+                
+                <label for="instructions">Instructions * (one per line)</label>
+                <textarea id="instructions" required placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Add wet ingredients">{{INSTRUCTIONS}}</textarea>
+                
+                <label for="notes">Notes (optional)</label>
+                <textarea id="notes" style="min-height: 100px;">{{NOTES}}</textarea>
+                
+                <button type="submit" id="saveBtn">Save Changes</button>
+                <button type="button" class="btn-cancel" onclick="window.location.href='/'">Cancel</button>
+                
+                <div id="status"></div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('category').value = '{{CATEGORY}}';
+        
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('saveBtn');
+            const status = document.getElementById('status');
+            
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            status.innerHTML = '';
+            
+            try {
+                const response = await fetch('/edit-submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        index: parseInt(document.getElementById('recipeIndex').value),
+                        title: document.getElementById('title').value,
+                        category: document.getElementById('category').value,
+                        ingredients: document.getElementById('ingredients').value,
+                        instructions: document.getElementById('instructions').value,
+                        notes: document.getElementById('notes').value
+                    })
+                });
+                
+                if (response.ok) {
+                    status.innerHTML = '<div class="status success">✅ Recipe updated! Redirecting...</div>';
+                    setTimeout(() => window.location.href = '/', 1000);
+                } else {
+                    status.innerHTML = '<div class="status error">❌ Failed to update recipe</div>';
+                    btn.disabled = false;
+                    btn.textContent = 'Save Changes';
+                }
+            } catch (e) {
+                status.innerHTML = '<div class="status error">❌ Error: ' + e.message + '</div>';
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+            }
+        });
     </script>
 </body>
 </html>'''
@@ -645,6 +797,7 @@ HTML = '''<!DOCTYPE html>
                         <button onclick="saveNotes(${index})" style="padding: 8px 16px; margin-top: 10px;">Save Notes</button>
                     </div>
                     <button onclick="backToList()">← Back to Recipes</button>
+                    <button onclick="window.location.href='/edit/${index}'">Edit Recipe</button>
                     <button class="btn-danger" onclick="deleteRecipe(${index})">Delete Recipe</button>
                 </div>
             `;
