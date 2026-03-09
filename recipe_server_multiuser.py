@@ -101,12 +101,12 @@ def validate_session(session_token):
 def extract_recipe(url):
     """Extract recipe from URL using JSON-LD schema or HTML parsing"""
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Try JSON-LD first
+        # Try JSON-LD first (most reliable)
         scripts = soup.find_all('script', type='application/ld+json')
         for script in scripts:
             try:
@@ -116,6 +116,13 @@ def extract_recipe(url):
                 if isinstance(data, dict) and '@graph' in data:
                     for item in data['@graph']:
                         if item.get('@type') == 'Recipe':
+                            data = item
+                            break
+                
+                # Handle array of items
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict) and item.get('@type') == 'Recipe':
                             data = item
                             break
                 
@@ -133,54 +140,73 @@ def extract_recipe(url):
                             if isinstance(inst, str):
                                 instructions.append(inst)
                             elif isinstance(inst, dict):
-                                instructions.append(inst.get('text', ''))
+                                text = inst.get('text', '') or inst.get('name', '')
+                                if text:
+                                    instructions.append(text)
                     
                     return {
                         'title': data.get('name', 'Untitled Recipe'),
-                        'ingredients': ingredients,
-                        'instructions': instructions
+                        'ingredients': [i for i in ingredients if i],
+                        'instructions': [i for i in instructions if i]
                     }
             except:
                 continue
         
-        # Fallback to HTML parsing - be more selective
-        # Try title tag first, then h1
-        title_tag = soup.find('title')
-        if title_tag:
-            title_text = title_tag.get_text().strip()
-            # Clean up common title patterns
-            title_text = title_text.split('|')[0].strip()  # Remove "| Site Name"
-            title_text = title_text.split('-')[0].strip()  # Remove "- Site Name"
-        else:
-            h1 = soup.find('h1')
-            title_text = h1.get_text().strip() if h1 else 'Untitled Recipe'
+        # Fallback: Try common recipe HTML structures
+        title = None
+        for selector in ['h1.recipe-title', 'h1.headline', 'h1', 'h2.recipe-title', '.recipe-title']:
+            elem = soup.select_one(selector)
+            if elem:
+                title = elem.get_text().strip()
+                break
         
+        if not title:
+            title_tag = soup.find('title')
+            if title_tag:
+                title = title_tag.get_text().strip().split('|')[0].split('-')[0].strip()
+            else:
+                title = 'Untitled Recipe'
+        
+        # Find ingredients with better selectors
         ingredients = []
-        # Look for ingredient lists specifically
-        for tag in soup.find_all('li'):
-            text = tag.get_text().strip()
-            # Must have measurement words and be reasonable length
-            if (any(word in text.lower() for word in ['cup', 'tablespoon', 'teaspoon', 'tbsp', 'tsp', 'oz', 'lb', 'gram', 'kg', 'ml', 'liter']) 
-                and len(text) < 200 and len(text) > 5):
-                ingredients.append(text)
-                if len(ingredients) >= 30:  # Limit to 30 ingredients
-                    break
+        for selector in ['.recipe-ingredients li', '.ingredients li', '[itemprop="recipeIngredient"]', 'li[itemprop="ingredients"]']:
+            items = soup.select(selector)
+            if items:
+                ingredients = [item.get_text().strip() for item in items if item.get_text().strip()]
+                break
         
+        # Fallback: look for lists with measurements
+        if not ingredients:
+            for tag in soup.find_all('li'):
+                text = tag.get_text().strip()
+                if (any(word in text.lower() for word in ['cup', 'tablespoon', 'teaspoon', 'tbsp', 'tsp', 'oz', 'lb', 'gram', 'kg', 'ml']) 
+                    and len(text) < 200 and len(text) > 5):
+                    ingredients.append(text)
+                    if len(ingredients) >= 30:
+                        break
+        
+        # Find instructions with better selectors
         instructions = []
-        # Look for instruction steps
-        for tag in soup.find_all(['li', 'p']):
-            text = tag.get_text().strip()
-            # Must have cooking verbs and be reasonable length
-            if (any(word in text.lower() for word in ['heat', 'cook', 'bake', 'mix', 'add', 'stir', 'place', 'combine', 'whisk', 'pour'])
-                and len(text) > 20 and len(text) < 500):
-                instructions.append(text)
-                if len(instructions) >= 20:  # Limit to 20 steps
-                    break
+        for selector in ['.recipe-instructions li', '.instructions li', '.recipe-steps li', '[itemprop="recipeInstructions"] li', 'ol li']:
+            items = soup.select(selector)
+            if items and len(items) > 2:  # Must have at least 3 steps
+                instructions = [item.get_text().strip() for item in items if item.get_text().strip()]
+                break
+        
+        # Fallback: look for paragraphs/lists with cooking verbs
+        if not instructions:
+            for tag in soup.find_all(['li', 'p']):
+                text = tag.get_text().strip()
+                if (any(word in text.lower() for word in ['heat', 'cook', 'bake', 'mix', 'add', 'stir', 'place', 'combine', 'whisk', 'pour'])
+                    and len(text) > 20 and len(text) < 500):
+                    instructions.append(text)
+                    if len(instructions) >= 20:
+                        break
         
         return {
-            'title': title_text,
-            'ingredients': ingredients,
-            'instructions': instructions
+            'title': title,
+            'ingredients': ingredients[:30],  # Limit
+            'instructions': instructions[:20]  # Limit
         }
     except Exception as e:
         raise Exception(f"Failed to extract recipe: {str(e)}")
