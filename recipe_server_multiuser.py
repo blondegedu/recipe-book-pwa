@@ -893,10 +893,10 @@ def get_main_html(user_id):
     <div class="container">
         <div class="header">
             <h1 onclick="backToList()" style="cursor: pointer;">{book_name}</h1>
-            <div>
-                <a href="https://ko-fi.com/yourname" target="_blank" style="padding: 10px 20px; background: #ff5e5b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; margin-right: 10px;">☕ Support</a>
-                <a href="/settings" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; margin-right: 10px;">⚙️ Settings</a>
-                <a href="/logout" class="logout">Logout</a>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="https://ko-fi.com/yourname" target="_blank" style="padding: 10px 15px; background: #ff5e5b; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 20px; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 45px; height: 45px;" title="Support">☕</a>
+                <a href="/settings" style="padding: 10px 15px; background: #6c757d; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 20px; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 45px; height: 45px;" title="Settings">⚙️</a>
+                <a href="/logout" style="padding: 10px 15px; background: #6c757d; color: white; border: none; border-radius: 50%; cursor: pointer; font-size: 20px; text-decoration: none; display: flex; align-items: center; justify-content: center; width: 45px; height: 45px;" title="Logout">🚪</a>
             </div>
         </div>
         <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
