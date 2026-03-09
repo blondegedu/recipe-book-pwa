@@ -833,6 +833,7 @@ def get_main_html(user_id):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{book_name}</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
+    <link rel="manifest" href="/manifest.json">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: {font_family}; background: #f9f7f4; padding: 20px; overflow-x: hidden; }}
@@ -867,6 +868,7 @@ def get_main_html(user_id):
         <div class="header">
             <h1 onclick="backToList()" style="cursor: pointer;">{book_name}</h1>
             <div>
+                <a href="https://ko-fi.com/yourname" target="_blank" style="padding: 10px 20px; background: #ff5e5b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; margin-right: 10px;">☕ Support</a>
                 <a href="/settings" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; margin-right: 10px;">⚙️ Settings</a>
                 <a href="/logout" class="logout">Logout</a>
             </div>
@@ -1113,6 +1115,29 @@ def get_main_html(user_id):
                 alert('Failed to create share link');
             }}
         }}
+        
+        // Register service worker for offline support
+        if ('serviceWorker' in navigator) {{
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed'));
+        }}
+        
+        // Show offline indicator
+        window.addEventListener('online', () => {{
+            const indicator = document.getElementById('offline-indicator');
+            if (indicator) indicator.remove();
+        }});
+        
+        window.addEventListener('offline', () => {{
+            if (!document.getElementById('offline-indicator')) {{
+                const div = document.createElement('div');
+                div.id = 'offline-indicator';
+                div.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: #dc3545; color: white; padding: 10px; text-align: center; z-index: 9999;';
+                div.textContent = '⚠️ You are offline - Some features may be limited';
+                document.body.prepend(div);
+            }}
+        }});
         
         loadRecipes();
     </script>
@@ -1422,6 +1447,20 @@ class RecipeHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(load_recipes(user_id)).encode())
+        
+        elif path == '/manifest.json':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            with open('manifest.json', 'rb') as f:
+                self.wfile.write(f.read())
+        
+        elif path == '/service-worker.js':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/javascript')
+            self.end_headers()
+            with open('service-worker.js', 'rb') as f:
+                self.wfile.write(f.read())
         
         else:
             self.send_response(404)
