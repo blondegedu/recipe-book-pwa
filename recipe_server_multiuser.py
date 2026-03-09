@@ -509,74 +509,49 @@ MANUAL_FORM_HTML = '''<!DOCTYPE html>
             const text = document.getElementById('quickPasteText').value;
             if (!text.trim()) return;
             
-            // Split by newlines first, then also split ingredients/instructions that are on same line
-            let lines = text.split('\\n').map(l => l.trim()).filter(l => l);
-            
-            // Try to split lines that have multiple items separated by dashes
-            let expandedLines = [];
-            for (let line of lines) {
-                // If line has multiple dashes, split by dash
-                if ((line.match(/-/g) || []).length > 1) {
-                    const parts = line.split(/(?=-)/);
-                    expandedLines.push(...parts.map(p => p.trim()));
-                } else {
-                    expandedLines.push(line);
-                }
-            }
-            lines = expandedLines;
+            // Split by double newlines first (paragraphs)
+            const paragraphs = text.split(/\\n\\n+/).map(p => p.trim()).filter(p => p);
             
             let title = '';
             let ingredients = [];
             let instructions = [];
-            let currentSection = 'unknown';
             
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                const lower = line.toLowerCase();
+            for (let para of paragraphs) {
+                const lines = para.split('\\n').map(l => l.trim()).filter(l => l);
                 
-                // Check for section headers
-                if (lower.includes('ingredient')) {
-                    currentSection = 'ingredients';
-                    continue;
-                } else if (lower.includes('instruction') || lower.includes('direction') || lower.includes('step')) {
-                    currentSection = 'instructions';
-                    continue;
-                }
-                
-                // Detect ingredients by pattern
-                const hasIngredientPattern = /\\d|cup|tbsp|tsp|tablespoon|teaspoon|oz|lb|gram|kg|ml|liter|\\//.test(line);
-                
-                // Detect instructions by pattern
-                const hasInstructionPattern = /^-|^\\d+\\.|mix|add|bake|cook|heat|stir|combine|fold|refrigerate|preheat|place/i.test(line);
-                
-                if (currentSection === 'unknown') {
-                    if (!title && i === 0 && !hasIngredientPattern) {
+                for (let line of lines) {
+                    const lower = line.toLowerCase();
+                    
+                    // Skip section headers
+                    if (lower.includes('ingredient') || lower.includes('instruction') || lower.includes('direction')) {
+                        continue;
+                    }
+                    
+                    // Check if line starts with dash (instructions)
+                    if (line.startsWith('-')) {
+                        // Split by dashes
+                        const parts = line.split(/(?=-)/).map(p => p.replace(/^-\\s*/, '').trim()).filter(p => p);
+                        instructions.push(...parts);
+                    }
+                    // Check if line has multiple measurements (ingredients on one line)
+                    else if ((line.match(/\\d+\\s*(?:cup|tbsp|tsp|teaspoon|tablespoon)/gi) || []).length > 1) {
+                        // Split by looking for number + measurement patterns
+                        const parts = line.split(/(?=\\d+\\s*(?:\\/\\d+)?\\s*(?:cup|tbsp|tsp|teaspoon|tablespoon|oz|lb))/i)
+                            .map(p => p.trim())
+                            .filter(p => p && /\\d/.test(p));
+                        ingredients.push(...parts);
+                    }
+                    // Single ingredient or instruction
+                    else if (/\\d|cup|tbsp|tsp|oz|lb/.test(line)) {
+                        ingredients.push(line);
+                    }
+                    else if (/mix|add|bake|cook|heat|stir|combine|fold|refrigerate|preheat|place/i.test(line)) {
+                        instructions.push(line);
+                    }
+                    // First non-matching line is title
+                    else if (!title) {
                         title = line;
-                    } else if (hasIngredientPattern && !hasInstructionPattern) {
-                        currentSection = 'ingredients';
-                        ingredients.push(line);
-                    } else if (hasInstructionPattern) {
-                        currentSection = 'instructions';
-                        instructions.push(line.replace(/^-\\s*/, ''));
                     }
-                } else if (currentSection === 'ingredients') {
-                    if (hasInstructionPattern && !hasIngredientPattern) {
-                        currentSection = 'instructions';
-                        instructions.push(line.replace(/^-\\s*/, ''));
-                    } else {
-                        ingredients.push(line);
-                    }
-                } else if (currentSection === 'instructions') {
-                    instructions.push(line.replace(/^-\\s*/, ''));
-                }
-            }
-            
-            // If we got a big block of ingredients, try to split by common patterns
-            if (ingredients.length === 1 && ingredients[0].length > 100) {
-                // Split by numbers at start of measurement patterns
-                const parts = ingredients[0].split(/(?=\\d+\\s*(?:cup|tbsp|tsp|oz|lb|\/))/).map(p => p.trim()).filter(p => p);
-                if (parts.length > 1) {
-                    ingredients = parts;
                 }
             }
             
