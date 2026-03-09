@@ -1448,6 +1448,12 @@ class RecipeHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(load_recipes(user_id)).encode())
         
+        elif path == '/health':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'ok', 'version': '1.0'}).encode())
+        
         elif path == '/manifest.json':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -1819,8 +1825,9 @@ class RecipeHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    PORT = 8080
-    server = HTTPServer(('0.0.0.0', PORT), RecipeHandler)
-    print(f'🍳 Multi-user Recipe Book server running on http://localhost:{PORT}')
+    PORT = int(os.environ.get('PORT', 8080))
+    HOST = os.environ.get('HOST', '0.0.0.0')
+    server = HTTPServer((HOST, PORT), RecipeHandler)
+    print(f'🍳 Multi-user Recipe Book server running on http://{HOST}:{PORT}')
     print(f'📝 Sign up at http://localhost:{PORT}/signup')
     server.serve_forever()
