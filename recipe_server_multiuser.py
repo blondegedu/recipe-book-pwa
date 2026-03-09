@@ -1062,7 +1062,19 @@ def get_main_html(user_id):
                     setTimeout(() => status.innerHTML = '', 3000);
                 }} else {{
                     const data = await res.json();
-                    status.innerHTML = '<p style="color: #721c24;">❌ ' + data.error + '</p>';
+                    if (data.blocked) {{
+                        status.innerHTML = `
+                            <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 15px; margin: 10px 0;">
+                                <p style="color: #856404; margin: 0 0 10px 0; font-weight: bold;">⚠️ ${{data.error}}</p>
+                                <p style="color: #856404; margin: 0 0 10px 0;">${{data.suggestion}}</p>
+                                <button onclick="window.location.href='/add-manual'" style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                                    📝 Add Recipe Manually
+                                </button>
+                            </div>
+                        `;
+                    }} else {{
+                        status.innerHTML = '<p style="color: #721c24;">❌ ' + data.error + '</p>';
+                    }}
                 }}
                 
                 btn.disabled = false;
@@ -1607,10 +1619,22 @@ class RecipeHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': True}).encode())
             except Exception as e:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': str(e)}).encode())
+                error_msg = str(e)
+                # Check if site is blocking us
+                if '402' in error_msg or '403' in error_msg or 'Payment Required' in error_msg or 'Forbidden' in error_msg:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'error': 'This site blocks automated recipe extraction.',
+                        'blocked': True,
+                        'suggestion': 'Try the Manual Add button instead - just copy/paste the recipe and use Quick Paste!'
+                    }).encode())
+                else:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': error_msg}).encode())
         
         elif path == '/api/add-manual':
             user_id = self.require_auth()
