@@ -9,18 +9,11 @@ import secrets
 import re
 from bs4 import BeautifulSoup
 import requests
-from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem
-from reportlab.lib.enums import TA_LEFT
 
 # File paths
 USERS_FILE = 'users.json'
 SESSIONS_FILE = 'sessions.json'
 RECIPES_DIR = 'user_recipes'
-SHARED_FILE = 'shared_recipes.json'
 
 # Ensure directories exist
 os.makedirs(RECIPES_DIR, exist_ok=True)
@@ -59,16 +52,6 @@ def save_recipes(user_id, recipes):
     recipe_file = os.path.join(RECIPES_DIR, f'{user_id}.json')
     with open(recipe_file, 'w') as f:
         json.dump(recipes, f, indent=2)
-
-def load_shared():
-    if os.path.exists(SHARED_FILE):
-        with open(SHARED_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_shared(shared):
-    with open(SHARED_FILE, 'w') as f:
-        json.dump(shared, f, indent=2)
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -680,39 +663,17 @@ SETTINGS_HTML = '''<!DOCTYPE html>
         </div>
         
         <div class="section">
-            <h2>Theme Customization</h2>
-            <p style="margin-bottom: 15px;">Personalize your recipe book's appearance:</p>
-            
-            <label for="primaryColor">Primary Color (buttons)</label>
-            <input type="color" id="primaryColor" value="{{PRIMARY_COLOR}}" style="width: 100px; height: 40px; cursor: pointer;">
-            
-            <label for="textColor">Text Color</label>
-            <input type="color" id="textColor" value="{{TEXT_COLOR}}" style="width: 100px; height: 40px; cursor: pointer;">
-            
-            <label for="fontFamily">Font</label>
-            <select id="fontFamily" style="width: 100%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px;">
-                <option value="Georgia, serif">Georgia (Classic)</option>
-                <option value="'Courier New', monospace">Courier New (Typewriter)</option>
-                <option value="Arial, sans-serif">Arial (Modern)</option>
-                <option value="'Times New Roman', serif">Times New Roman (Traditional)</option>
-                <option value="Verdana, sans-serif">Verdana (Clean)</option>
-            </select>
-            
-            <button onclick="saveTheme()">Save Theme</button>
-            <button onclick="resetTheme()" style="background: #6c757d; color: white; margin-left: 10px;">Reset to Default</button>
-            <div id="themeStatus"></div>
-        </div>
-        
-        <div class="section">
             <h2>Premium Features</h2>
-            <p>You have access to all premium features! 🎉</p>
+            <p>Upgrade to premium for $5 (one-time) to unlock:</p>
             <ul style="margin: 15px 0 15px 20px; line-height: 1.8;">
-                <li>✅ Custom themes (colors & fonts)</li>
-                <li>✅ Recipe sharing with friends</li>
-                <li>✅ PDF export</li>
-                <li>✅ Premium badge</li>
+                <li>Custom themes (colors & fonts)</li>
+                <li>Recipe sharing with friends</li>
+                <li>PDF export</li>
+                <li>Enhanced printing options</li>
+                <li>Premium badge</li>
             </ul>
-            <p style="margin-top: 10px; font-size: 14px; color: #666;">Thank you for using Recipe Book!</p>
+            <button style="background: #2d5016; color: white;">🌟 Upgrade to Premium - $5</button>
+            <p style="margin-top: 10px; font-size: 14px; color: #666;">Coming soon!</p>
         </div>
         
         <div class="section">
@@ -749,56 +710,6 @@ SETTINGS_HTML = '''<!DOCTYPE html>
                 status.innerHTML = '<div class="status error">❌ Error: ' + e.message + '</div>';
             }
         }
-        
-        async function saveTheme() {
-            const theme = {
-                primaryColor: document.getElementById('primaryColor').value,
-                textColor: document.getElementById('textColor').value,
-                fontFamily: document.getElementById('fontFamily').value
-            };
-            const status = document.getElementById('themeStatus');
-            
-            try {
-                const res = await fetch('/api/update-theme', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(theme)
-                });
-                
-                if (res.ok) {
-                    status.innerHTML = '<div class="status success">✅ Theme saved! Refresh to see changes.</div>';
-                } else {
-                    status.innerHTML = '<div class="status error">❌ Failed to save theme</div>';
-                }
-            } catch (e) {
-                status.innerHTML = '<div class="status error">❌ Error: ' + e.message + '</div>';
-            }
-        }
-        
-        async function resetTheme() {
-            const status = document.getElementById('themeStatus');
-            
-            try {
-                const res = await fetch('/api/reset-theme', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
-                
-                if (res.ok) {
-                    status.innerHTML = '<div class="status success">✅ Theme reset! Refresh to see changes.</div>';
-                    document.getElementById('primaryColor').value = '#f4d03f';
-                    document.getElementById('textColor').value = '#2d5016';
-                    document.getElementById('fontFamily').value = 'Georgia, serif';
-                } else {
-                    status.innerHTML = '<div class="status error">❌ Failed to reset theme</div>';
-                }
-            } catch (e) {
-                status.innerHTML = '<div class="status error">❌ Error: ' + e.message + '</div>';
-            }
-        }
-        
-        // Set current font selection
-        document.getElementById('fontFamily').value = '{{FONT_FAMILY}}';
     </script>
 </body>
 </html>'''
@@ -809,22 +720,8 @@ SETTINGS_HTML = '''<!DOCTYPE html>
 # Main HTML (will be populated with user's recipe book name)
 def get_main_html(user_id):
     users = load_users()
-    user_email = None
-    user = None
-    for email, user_data in users.items():
-        if user_data['user_id'] == user_id:
-            user = user_data
-            break
-    
-    if not user:
-        user = {}
-    
+    user = users.get(user_id, {})
     book_name = user.get('book_name', '🍳 Recipe Book')
-    theme = user.get('theme', {})
-    primary_color = theme.get('primaryColor', '#f4d03f')
-    primary_hover = theme.get('primaryColor', '#f1c40f')  # Slightly darker
-    text_color = theme.get('textColor', '#2d5016')
-    font_family = theme.get('fontFamily', 'Georgia, serif')
     
     return f'''<!DOCTYPE html>
 <html>
@@ -835,24 +732,24 @@ def get_main_html(user_id):
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: {font_family}; background: #f9f7f4; padding: 20px; overflow-x: hidden; }}
+        body {{ font-family: Georgia, serif; background: #f9f7f4; padding: 20px; overflow-x: hidden; }}
         .container {{ max-width: 1200px; margin: 0 auto; width: 100%; }}
         .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
-        h1 {{ color: {text_color}; word-wrap: break-word; cursor: pointer; }}
+        h1 {{ color: #2d5016; word-wrap: break-word; cursor: pointer; }}
         .logout {{ padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; }}
         .logout:hover {{ background: #5a6268; }}
         .recipe-list {{ display: grid; gap: 20px; margin-top: 20px; }}
         .recipe-card {{ background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; cursor: pointer; max-width: 100%; }}
         .recipe-card:hover {{ transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }}
-        .recipe-card h2 {{ color: {text_color}; font-size: 22px; margin-bottom: 10px; word-wrap: break-word; }}
+        .recipe-card h2 {{ color: #2d5016; font-size: 22px; margin-bottom: 10px; word-wrap: break-word; }}
         .recipe-full {{ background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 30px; margin-bottom: 20px; max-width: 100%; overflow-wrap: break-word; }}
-        .recipe-full h2 {{ color: {text_color}; font-size: 28px; margin-bottom: 20px; word-wrap: break-word; }}
+        .recipe-full h2 {{ color: #2d5016; font-size: 28px; margin-bottom: 20px; word-wrap: break-word; }}
         .ingredients, .instructions {{ margin: 20px 0; }}
-        .ingredients h3, .instructions h3 {{ color: {text_color}; margin-bottom: 15px; }}
+        .ingredients h3, .instructions h3 {{ color: #2d5016; margin-bottom: 15px; }}
         .ingredients li {{ padding: 8px 0; word-wrap: break-word; }}
         .instructions li {{ padding: 10px 0; margin-bottom: 10px; word-wrap: break-word; }}
-        button {{ padding: 12px 24px; background: {primary_color}; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin: 10px 10px 10px 0; font-weight: bold; }}
-        button:hover {{ background: {primary_hover}; }}
+        button {{ padding: 12px 24px; background: #f4d03f; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin: 10px 10px 10px 0; font-weight: bold; }}
+        button:hover {{ background: #f1c40f; }}
         .btn-danger {{ background: #dc3545; color: white; }}
         .btn-danger:hover {{ background: #c82333; }}
         @media (max-width: 600px) {{
@@ -997,8 +894,6 @@ def get_main_html(user_id):
                     <button onclick="backToList()">← Back to Recipes</button>
                     <button onclick="window.location.href='/edit/${{index}}'">Edit Recipe</button>
                     <button onclick="printRecipe(${{index}})">🖨️ Print</button>
-                    <button onclick="shareRecipe(${{index}})">🔗 Share</button>
-                    <button onclick="window.location.href='/pdf/${{index}}'">📄 PDF</button>
                     ${{recipe.url ? `<button onclick="window.open('${{recipe.url}}', '_blank')" style="background: #2d5016; color: white;">View Original Recipe</button>` : ''}}
                     <button class="btn-danger" onclick="deleteRecipe(${{index}})">Delete Recipe</button>
                 </div>
@@ -1096,24 +991,6 @@ def get_main_html(user_id):
             window.open('/print/' + index, '_blank');
         }}
         
-        async function shareRecipe(index) {{
-            try {{
-                const res = await fetch('/api/share', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{index}})
-                }});
-                const data = await res.json();
-                if (data.shareId) {{
-                    const shareUrl = window.location.origin + '/shared/' + data.shareId;
-                    navigator.clipboard.writeText(shareUrl);
-                    alert('Share link copied to clipboard!\\n\\n' + shareUrl);
-                }}
-            }} catch (err) {{
-                alert('Failed to create share link');
-            }}
-        }}
-        
         loadRecipes();
     </script>
 </body>
@@ -1179,80 +1056,6 @@ class RecipeHandler(BaseHTTPRequestHandler):
 </body>
 </html>'''
     
-    def get_shared_html(self, recipe):
-        ingredients_html = '<ul>' + ''.join(f'<li>{i}</li>' for i in recipe.get('ingredients', [])) + '</ul>'
-        instructions_html = '<ol>' + ''.join(f'<li>{i}</li>' for i in recipe.get('instructions', [])) + '</ol>'
-        
-        return f'''<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{recipe['title']}</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
-    <style>
-        body {{ font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f9f7f4; }}
-        .recipe {{ background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 30px; }}
-        h1 {{ color: #2d5016; margin-bottom: 10px; }}
-        h2 {{ color: #2d5016; margin-top: 30px; margin-bottom: 15px; }}
-        ul, ol {{ margin-left: 20px; }}
-        li {{ margin-bottom: 8px; line-height: 1.6; }}
-        .notes {{ margin-top: 30px; padding: 15px; background: #f9f7f4; border-radius: 4px; }}
-    </style>
-</head>
-<body>
-    <div class="recipe">
-        <h1>{recipe['title']}</h1>
-        <p><strong>Category:</strong> {recipe.get('category', 'Other')}</p>
-        <h2>Ingredients</h2>
-        {ingredients_html}
-        <h2>Instructions</h2>
-        {instructions_html}
-        {f'<div class="notes"><strong>Notes:</strong><br>{recipe.get("notes", "")}</div>' if recipe.get('notes') else ''}
-    </div>
-</body>
-</html>'''
-    
-    def generate_pdf(self, recipe):
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch)
-        styles = getSampleStyleSheet()
-        story = []
-        
-        # Title
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, textColor='#2d5016')
-        story.append(Paragraph(recipe['title'], title_style))
-        story.append(Spacer(1, 0.2*inch))
-        
-        # Category
-        if recipe.get('category'):
-            story.append(Paragraph(f"<b>Category:</b> {recipe['category']}", styles['Normal']))
-            story.append(Spacer(1, 0.2*inch))
-        
-        # Ingredients
-        story.append(Paragraph('<b>Ingredients</b>', styles['Heading2']))
-        story.append(Spacer(1, 0.1*inch))
-        if recipe.get('ingredients'):
-            items = [ListItem(Paragraph(ing, styles['Normal'])) for ing in recipe['ingredients']]
-            story.append(ListFlowable(items, bulletType='bullet'))
-        story.append(Spacer(1, 0.2*inch))
-        
-        # Instructions
-        story.append(Paragraph('<b>Instructions</b>', styles['Heading2']))
-        story.append(Spacer(1, 0.1*inch))
-        if recipe.get('instructions'):
-            items = [ListItem(Paragraph(inst, styles['Normal'])) for inst in recipe['instructions']]
-            story.append(ListFlowable(items, bulletType='1'))
-        story.append(Spacer(1, 0.2*inch))
-        
-        # Notes
-        if recipe.get('notes'):
-            story.append(Paragraph('<b>Notes</b>', styles['Heading2']))
-            story.append(Spacer(1, 0.1*inch))
-            story.append(Paragraph(recipe['notes'], styles['Normal']))
-        
-        doc.build(story)
-        return buffer.getvalue()
-    
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -1312,14 +1115,10 @@ class RecipeHandler(BaseHTTPRequestHandler):
                     break
             
             recipes = load_recipes(user_id)
-            theme = user.get('theme', {})
             settings_html = SETTINGS_HTML.replace('{{BOOK_NAME}}', user.get('book_name', '🍳 Recipe Book'))
             settings_html = settings_html.replace('{{EMAIL}}', user_email or 'Unknown')
             settings_html = settings_html.replace('{{CREATED}}', user.get('created', 'Unknown')[:10])
             settings_html = settings_html.replace('{{RECIPE_COUNT}}', str(len(recipes)))
-            settings_html = settings_html.replace('{{PRIMARY_COLOR}}', theme.get('primaryColor', '#f4d03f'))
-            settings_html = settings_html.replace('{{TEXT_COLOR}}', theme.get('textColor', '#2d5016'))
-            settings_html = settings_html.replace('{{FONT_FAMILY}}', theme.get('fontFamily', 'Georgia, serif'))
             
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -1351,47 +1150,6 @@ class RecipeHandler(BaseHTTPRequestHandler):
                     self.end_headers()
             except:
                 self.send_response(404)
-                self.end_headers()
-        
-        elif path.startswith('/shared/'):
-            share_id = path.split('/')[-1]
-            shared = load_shared()
-            
-            if share_id not in shared:
-                self.send_response(404)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                self.wfile.write(b'<h1>Recipe not found</h1>')
-                return
-            
-            recipe = shared[share_id]['recipe']
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            self.wfile.write(self.get_shared_html(recipe).encode())
-        
-        elif path.startswith('/pdf/'):
-            user_id = self.require_auth()
-            if not user_id:
-                return
-            try:
-                recipe_index = int(path.split('/')[-1])
-                recipes = load_recipes(user_id)
-                if 0 <= recipe_index < len(recipes):
-                    recipe = recipes[recipe_index]
-                    pdf_data = self.generate_pdf(recipe)
-                    filename = re.sub(r'[^\w\s-]', '', recipe['title']).strip().replace(' ', '_')
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/pdf')
-                    self.send_header('Content-Disposition', f'attachment; filename="{filename}.pdf"')
-                    self.end_headers()
-                    self.wfile.write(pdf_data)
-                else:
-                    self.send_response(404)
-                    self.end_headers()
-            except Exception as e:
-                print(f"PDF error: {e}")
-                self.send_response(500)
                 self.end_headers()
         
         elif path.startswith('/print/'):
@@ -1693,83 +1451,6 @@ class RecipeHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({'success': True}).encode())
-        
-        elif path == '/api/update-theme':
-            user_id = self.require_auth()
-            if not user_id:
-                return
-            
-            length = int(self.headers['Content-Length'])
-            data = json.loads(self.rfile.read(length))
-            theme = {
-                'primaryColor': data.get('primaryColor', '#f4d03f'),
-                'textColor': data.get('textColor', '#2d5016'),
-                'fontFamily': data.get('fontFamily', 'Georgia, serif')
-            }
-            
-            users = load_users()
-            for email, user_data in users.items():
-                if user_data['user_id'] == user_id:
-                    user_data['theme'] = theme
-                    save_users(users)
-                    break
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode())
-        
-        elif path == '/api/reset-theme':
-            user_id = self.require_auth()
-            if not user_id:
-                return
-            
-            users = load_users()
-            for email, user_data in users.items():
-                if user_data['user_id'] == user_id:
-                    user_data['theme'] = {
-                        'primaryColor': '#f4d03f',
-                        'textColor': '#2d5016',
-                        'fontFamily': 'Georgia, serif'
-                    }
-                    save_users(users)
-                    break
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'success': True}).encode())
-        
-        elif path == '/api/share':
-            user_id = self.require_auth()
-            if not user_id:
-                return
-            
-            length = int(self.headers['Content-Length'])
-            data = json.loads(self.rfile.read(length))
-            index = data.get('index')
-            
-            recipes = load_recipes(user_id)
-            if index < 0 or index >= len(recipes):
-                self.send_response(400)
-                self.end_headers()
-                return
-            
-            recipe = recipes[index]
-            share_id = secrets.token_urlsafe(16)
-            
-            shared = load_shared()
-            shared[share_id] = {
-                'user_id': user_id,
-                'recipe': recipe,
-                'created': datetime.now().isoformat()
-            }
-            save_shared(shared)
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'shareId': share_id}).encode())
         
         else:
             self.send_response(404)
