@@ -144,11 +144,13 @@ def extract_recipe(url):
                                 if text:
                                     instructions.append(text)
                     
-                    return {
-                        'title': data.get('name', 'Untitled Recipe'),
-                        'ingredients': [i for i in ingredients if i],
-                        'instructions': [i for i in instructions if i]
-                    }
+                    # Only return if we have both ingredients AND instructions
+                    if ingredients and instructions:
+                        return {
+                            'title': data.get('name', 'Untitled Recipe'),
+                            'ingredients': [i for i in ingredients if i],
+                            'instructions': [i for i in instructions if i]
+                        }
             except:
                 continue
         
@@ -175,11 +177,14 @@ def extract_recipe(url):
                 ingredients = [item.get_text().strip() for item in items if item.get_text().strip()]
                 break
         
-        # Fallback: look for lists with measurements
+        # Fallback: look for lists with measurements, but exclude junk
         if not ingredients:
+            exclude_words = ['instagram', 'facebook', 'pinterest', 'twitter', 'subscribe', 'newsletter', 'comment', 'reply', 'share']
             for tag in soup.find_all('li'):
                 text = tag.get_text().strip()
+                # Must have measurements and not be social/comment junk
                 if (any(word in text.lower() for word in ['cup', 'tablespoon', 'teaspoon', 'tbsp', 'tsp', 'oz', 'lb', 'gram', 'kg', 'ml']) 
+                    and not any(word in text.lower() for word in exclude_words)
                     and len(text) < 200 and len(text) > 5):
                     ingredients.append(text)
                     if len(ingredients) >= 30:
@@ -193,12 +198,16 @@ def extract_recipe(url):
                 instructions = [item.get_text().strip() for item in items if item.get_text().strip()]
                 break
         
-        # Fallback: look for paragraphs/lists with cooking verbs
+        # Fallback: look for paragraphs/lists with cooking verbs, but exclude junk
         if not instructions:
+            exclude_words = ['instagram', 'facebook', 'pinterest', 'twitter', 'subscribe', 'newsletter', 'comment', 'reply', 'share', 'recipe', 'click here', 'read more']
             for tag in soup.find_all(['li', 'p']):
                 text = tag.get_text().strip()
+                # Must have cooking verbs and not be social/comment/link junk
                 if (any(word in text.lower() for word in ['heat', 'cook', 'bake', 'mix', 'add', 'stir', 'place', 'combine', 'whisk', 'pour'])
-                    and len(text) > 20 and len(text) < 500):
+                    and not any(word in text.lower() for word in exclude_words)
+                    and len(text) > 20 and len(text) < 500
+                    and not text.startswith('http')):  # Exclude URLs
                     instructions.append(text)
                     if len(instructions) >= 20:
                         break
@@ -1600,6 +1609,19 @@ class RecipeHandler(BaseHTTPRequestHandler):
             
             try:
                 recipe_data = extract_recipe(url)
+                
+                # Check if extraction was poor (missing data or junk)
+                if not recipe_data.get('ingredients') or not recipe_data.get('instructions') or len(recipe_data.get('ingredients', [])) < 2:
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        'error': 'Could not extract recipe properly from this site.',
+                        'blocked': True,
+                        'suggestion': 'This site may not have proper recipe formatting. Try Manual Add - copy/paste the recipe!'
+                    }).encode())
+                    return
+                
                 recipe = {
                     'title': recipe_data['title'],
                     'category': 'Other',
