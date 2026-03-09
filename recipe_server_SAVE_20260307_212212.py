@@ -125,6 +125,7 @@ class RecipeHandler(BaseHTTPRequestHandler):
                 recipe = recipes[recipe_index]
                 edit_html = EDIT_FORM_HTML.replace('{{RECIPE_INDEX}}', str(recipe_index))
                 edit_html = edit_html.replace('{{TITLE}}', recipe['title'])
+                edit_html = edit_html.replace('{{URL}}', recipe.get('url', ''))
                 edit_html = edit_html.replace('{{CATEGORY}}', recipe['category'])
                 edit_html = edit_html.replace('{{INGREDIENTS}}', '\n'.join(recipe['ingredients']))
                 edit_html = edit_html.replace('{{INSTRUCTIONS}}', '\n'.join(recipe['instructions']))
@@ -176,7 +177,7 @@ class RecipeHandler(BaseHTTPRequestHandler):
                 'ingredients': [i.strip() for i in data.get('ingredients', '').split('\n') if i.strip()],
                 'instructions': [i.strip() for i in data.get('instructions', '').split('\n') if i.strip()],
                 'notes': data.get('notes', ''),
-                'url': '',
+                'url': data.get('url', ''),
                 'date': datetime.now().isoformat()
             }
             
@@ -260,6 +261,7 @@ class RecipeHandler(BaseHTTPRequestHandler):
             recipes = load_recipes()
             if 0 <= index < len(recipes):
                 recipes[index]['title'] = data.get('title', '')
+                recipes[index]['url'] = data.get('url', '')
                 recipes[index]['category'] = data.get('category', 'Other')
                 recipes[index]['ingredients'] = [i.strip() for i in data.get('ingredients', '').split('\n') if i.strip()]
                 recipes[index]['instructions'] = [i.strip() for i in data.get('instructions', '').split('\n') if i.strip()]
@@ -333,6 +335,9 @@ MANUAL_FORM_HTML = '''<!DOCTYPE html>
                 <label for="title">Recipe Title *</label>
                 <input type="text" id="title" required placeholder="e.g., Chocolate Chip Cookies">
                 
+                <label for="url">Recipe URL (optional)</label>
+                <input type="url" id="url" placeholder="https://example.com/recipe">
+                
                 <label for="category">Category</label>
                 <select id="category">
                     <option value="Other">Other</option>
@@ -383,6 +388,7 @@ Bake for 20 minutes"></textarea>
             
             const data = {
                 title: document.getElementById('title').value,
+                url: document.getElementById('url').value,
                 category: document.getElementById('category').value,
                 ingredients: document.getElementById('ingredients').value,
                 instructions: document.getElementById('instructions').value,
@@ -509,6 +515,9 @@ EDIT_FORM_HTML = '''<!DOCTYPE html>
                 <label for="title">Recipe Title *</label>
                 <input type="text" id="title" required value="{{TITLE}}">
                 
+                <label for="url">Recipe URL (optional)</label>
+                <input type="url" id="url" value="{{URL}}" placeholder="https://example.com/recipe">
+                
                 <label for="category">Category *</label>
                 <select id="category" required>
                     <option value="Breakfast">Breakfast</option>
@@ -556,6 +565,7 @@ EDIT_FORM_HTML = '''<!DOCTYPE html>
                     body: JSON.stringify({
                         index: parseInt(document.getElementById('recipeIndex').value),
                         title: document.getElementById('title').value,
+                        url: document.getElementById('url').value,
                         category: document.getElementById('category').value,
                         ingredients: document.getElementById('ingredients').value,
                         instructions: document.getElementById('instructions').value,
@@ -618,12 +628,15 @@ HTML = '''<!DOCTYPE html>
     <div class="container">
         <h1 onclick="backToList()" style="cursor: pointer;">🍳 Recipe Book</h1>
         <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <input type="text" id="urlInput" placeholder="Paste recipe URL..." style="width: 70%; max-width: 100%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; box-sizing: border-box;" />
-            <button onclick="addRecipe()" id="addBtn">Add Recipe</button>
-            <div id="status" style="margin-top: 10px;"></div>
-            <p style="margin-top: 10px; font-size: 14px; color: #666; word-wrap: break-word;">
-                If a URL doesn't work, try <a href="https://www.justtherecipe.com/" target="_blank" style="color: #8b4513;">JustTheRecipe.com</a> or <a href="https://video2recipe.com/" target="_blank" style="color: #8b4513;">Video2Recipe.com</a> first, then paste the result URL here.<br>
-                Or <a href="/add-manual" style="color: #2d5016; font-weight: bold;">add a recipe manually</a>.
+            <input type="text" id="urlInput" placeholder="Paste recipe URL..." style="width: 100%; padding: 12px; border: 2px solid #d4c5b9; border-radius: 4px; font-size: 16px; box-sizing: border-box; margin-bottom: 12px;" />
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                <button onclick="addRecipe()" id="addBtn" style="flex: 1; padding: 12px; font-size: 16px; margin: 0;">Add from URL</button>
+                <span style="color: #999; font-size: 14px; padding: 0 15px; text-align: center;">or</span>
+                <button onclick="window.location.href='/add-manual'" style="flex: 1; padding: 12px; font-size: 16px; margin: 0;">Add Manually</button>
+            </div>
+            <div id="status"></div>
+            <p style="font-size: 13px; color: #666; margin-top: 10px;">
+                💡 If a URL doesn't work, try <a href="https://www.justtherecipe.com/" target="_blank" style="color: #8b4513;">JustTheRecipe.com</a> or <a href="https://video2recipe.com/" target="_blank" style="color: #8b4513;">Video2Recipe.com</a> first
             </p>
         </div>
         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
@@ -798,6 +811,7 @@ HTML = '''<!DOCTYPE html>
                     </div>
                     <button onclick="backToList()">← Back to Recipes</button>
                     <button onclick="window.location.href='/edit/${index}'">Edit Recipe</button>
+                    ${recipe.url ? `<button onclick="window.open('${recipe.url}', '_blank')" style="background: #2d5016; color: white;">View Original Recipe</button>` : ''}
                     <button class="btn-danger" onclick="deleteRecipe(${index})">Delete Recipe</button>
                 </div>
             `;
