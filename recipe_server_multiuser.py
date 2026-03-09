@@ -511,43 +511,59 @@ MANUAL_FORM_HTML = '''<!DOCTYPE html>
             
             const lines = text.split('\\n').map(l => l.trim()).filter(l => l);
             
-            // Extract title (first non-empty line)
-            const title = lines[0] || 'Untitled Recipe';
-            document.getElementById('title').value = title;
+            // Try to detect sections
+            let title = '';
+            let ingredients = [];
+            let instructions = [];
             
-            // Find ingredients section
-            let ingredientsStart = -1;
-            let ingredientsEnd = -1;
-            let instructionsStart = -1;
+            let currentSection = 'unknown';
             
             for (let i = 0; i < lines.length; i++) {
-                const lower = lines[i].toLowerCase();
-                if (lower.includes('ingredient') && ingredientsStart === -1) {
-                    ingredientsStart = i + 1;
-                } else if ((lower.includes('instruction') || lower.includes('direction') || lower.includes('step')) && instructionsStart === -1) {
-                    if (ingredientsStart !== -1 && ingredientsEnd === -1) {
-                        ingredientsEnd = i;
+                const line = lines[i];
+                const lower = line.toLowerCase();
+                
+                // Check for section headers
+                if (lower.includes('ingredient')) {
+                    currentSection = 'ingredients';
+                    continue;
+                } else if (lower.includes('instruction') || lower.includes('direction') || lower.includes('step')) {
+                    currentSection = 'instructions';
+                    continue;
+                }
+                
+                // Detect ingredients by pattern (measurements, fractions)
+                const hasIngredientPattern = /\\d|cup|tbsp|tsp|tablespoon|teaspoon|oz|lb|gram|kg|ml|liter|\\//.test(line);
+                
+                // Detect instructions by pattern (starts with dash, action verbs)
+                const hasInstructionPattern = /^-|^\\d+\\.|mix|add|bake|cook|heat|stir|combine|fold|refrigerate|preheat|place/i.test(line);
+                
+                if (currentSection === 'unknown') {
+                    // First line is likely title
+                    if (!title && i === 0) {
+                        title = line;
+                    } else if (hasIngredientPattern && !hasInstructionPattern) {
+                        currentSection = 'ingredients';
+                        ingredients.push(line);
+                    } else if (hasInstructionPattern) {
+                        currentSection = 'instructions';
+                        instructions.push(line.replace(/^-\\s*/, ''));
                     }
-                    instructionsStart = i + 1;
+                } else if (currentSection === 'ingredients') {
+                    if (hasInstructionPattern && !hasIngredientPattern) {
+                        currentSection = 'instructions';
+                        instructions.push(line.replace(/^-\\s*/, ''));
+                    } else {
+                        ingredients.push(line);
+                    }
+                } else if (currentSection === 'instructions') {
+                    instructions.push(line.replace(/^-\\s*/, ''));
                 }
             }
             
-            // Extract ingredients
-            if (ingredientsStart !== -1) {
-                const endIdx = ingredientsEnd !== -1 ? ingredientsEnd : (instructionsStart !== -1 ? instructionsStart - 1 : lines.length);
-                const ingredients = lines.slice(ingredientsStart, endIdx)
-                    .filter(l => !l.toLowerCase().includes('ingredient'))
-                    .join('\\n');
-                document.getElementById('ingredients').value = ingredients;
-            }
-            
-            // Extract instructions
-            if (instructionsStart !== -1) {
-                const instructions = lines.slice(instructionsStart)
-                    .filter(l => !l.toLowerCase().includes('instruction') && !l.toLowerCase().includes('direction'))
-                    .join('\\n');
-                document.getElementById('instructions').value = instructions;
-            }
+            // Fill form
+            document.getElementById('title').value = title || 'Untitled Recipe';
+            document.getElementById('ingredients').value = ingredients.join('\\n');
+            document.getElementById('instructions').value = instructions.join('\\n');
             
             closeQuickPaste();
         }
