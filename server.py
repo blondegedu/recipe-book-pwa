@@ -127,6 +127,13 @@ class Handler(BaseHTTPRequestHandler):
             with open('service-worker.js', 'rb') as f:
                 self.wfile.write(f.read())
 
+        elif path == '/icon-512.png':
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/png')
+            self.end_headers()
+            with open('icon-512.png', 'rb') as f:
+                self.wfile.write(f.read())
+
         elif path.startswith('/shared-json/'):
             share_id = path.split('/')[-1]
             shared = load_shared()
