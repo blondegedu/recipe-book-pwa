@@ -108,6 +108,13 @@
     <div class="modal">
         <h2 id="modalTitle">Add Recipe</h2>
         <input type="hidden" id="editId">
+
+        <!-- Quick paste -->
+        <div style="background:#fff9e6;border:2px dashed #f4d03f;border-radius:4px;padding:15px;margin-bottom:15px;">
+            <strong style="color:#2d5016;">Quick Paste</strong> — copy a recipe from Facebook, a website, anywhere, and paste it here:
+            <textarea id="quickPasteText" placeholder="Paste full recipe text here..." style="min-height:100px;margin-top:10px;"></textarea>
+            <button type="button" class="btn btn-dark" onclick="parseQuickPaste()" style="margin-top:8px;">✨ Parse Recipe</button>
+        </div>
         <label>Title *</label>
         <input type="text" id="editTitleInput">
         <label>Category</label>
@@ -487,6 +494,44 @@ function toast(msg) {
     el.textContent = msg;
     el.style.display = 'block';
     setTimeout(() => el.style.display = 'none', 3000);
+}
+
+// ── Quick Paste Parser ─────────────────────────────────────
+function parseQuickPaste() {
+    const text = document.getElementById('quickPasteText').value.trim();
+    if (!text) return;
+
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const title = lines[0].replace(/^["'"]+|["'"]+$/g, '').trim() || 'Untitled Recipe';
+
+    // Strip leading quotes/bullets/numbers from any line (including smart quotes)
+    const clean = l => l.replace(/^[\u201c\u201d\u2018\u2019"'•*-]\s*/, '').replace(/^\d+[.)]\s*/, '').trim();
+
+    const ingHeader = l => /^ingredients?\s*:/i.test(l);
+    const instHeader = l => /^instructions?|^directions?|^method|^how to|^steps?/i.test(l);
+
+    let ingredients = [], instructions = [], mode = null;
+
+    for (let i = 1; i < lines.length; i++) {
+        const raw = lines[i];
+        const line = clean(raw);
+        if (!line) continue;
+
+        if (ingHeader(line)) { mode = 'ing'; continue; }
+        if (instHeader(line)) { mode = 'inst'; continue; }
+
+        if (mode === 'ing') {
+            ingredients.push(line);
+        } else if (mode === 'inst') {
+            instructions.push(line);
+        }
+    }
+
+    document.getElementById('editTitleInput').value = title;
+    document.getElementById('editIngredients').value = ingredients.join('\n');
+    document.getElementById('editInstructions').value = instructions.join('\n');
+    document.getElementById('quickPasteText').value = '';
+    toast('Parsed! Review and adjust as needed.');
 }
 
 // ── Settings ───────────────────────────────────────────────
