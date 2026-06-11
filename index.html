@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍳 Recipe Book</title>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Georgia, serif; background:#f9f7f4; padding:20px; }
+        .container { max-width:1000px; margin:0 auto; }
+        header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+        h1 { color:#2d5016; font-size:26px; cursor:pointer; }
+        .add-box { background:white; padding:20px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); margin-bottom:20px; }
+        .add-row { display:flex; gap:10px; margin-bottom:10px; }
+        input[type=text], input[type=url], input[type=search], select, textarea {
+            padding:12px; border:2px solid #d4c5b9; border-radius:4px; font-size:16px;
+            font-family:Georgia,serif; width:100%; box-sizing:border-box;
+        }
+        .btn { padding:12px 20px; background:#f4d03f; color:#333; border:none; border-radius:4px;
+               cursor:pointer; font-size:15px; font-weight:bold; white-space:nowrap; }
+        .btn:hover { background:#f1c40f; }
+        .btn-dark { background:#2d5016; color:white; }
+        .btn-dark:hover { background:#1e3a0f; }
+        .btn-danger { background:#dc3545; color:white; }
+        .btn-danger:hover { background:#c82333; }
+        .btn-gray { background:#6c757d; color:white; }
+        .btn-gray:hover { background:#5a6268; }
+        .search-row { display:flex; gap:10px; margin-bottom:20px; }
+        .recipe-grid { display:grid; gap:16px; }
+        .recipe-card { background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);
+                       padding:20px; cursor:pointer; transition:transform .15s; }
+        .recipe-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.15); }
+        .recipe-card h2 { color:#2d5016; font-size:20px; margin-bottom:6px; }
+        .recipe-card .cat { color:#888; font-size:14px; }
+        .recipe-view { background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); padding:30px; }
+        .recipe-view h2 { color:#2d5016; font-size:26px; margin-bottom:8px; }
+        .recipe-view h3 { color:#2d5016; font-size:18px; margin:20px 0 10px;
+                          border-bottom:2px solid #f4d03f; padding-bottom:6px; }
+        .recipe-view ul, .recipe-view ol { margin-left:22px; }
+        .recipe-view li { padding:6px 0; line-height:1.6; }
+        .actions { display:flex; gap:8px; flex-wrap:wrap; margin:20px 0; }
+        .notes-box { margin-top:20px; }
+        .notes-box textarea { min-height:80px; }
+        .notes-display { margin-top:20px; padding:15px; background:#fff9e6;
+                         border-radius:4px; border-left:4px solid #f4d03f; }
+        .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100;
+                    align-items:center; justify-content:center; padding:20px; }
+        .modal-bg.open { display:flex; }
+        .modal { background:white; border-radius:8px; padding:30px; width:100%; max-width:600px;
+                 max-height:90vh; overflow-y:auto; }
+        .modal h2 { color:#2d5016; margin-bottom:20px; }
+        .modal label { display:block; color:#2d5016; font-weight:bold; margin:15px 0 5px; }
+        .modal textarea { min-height:140px; }
+        .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+                 background:#2d5016; color:white; padding:12px 24px; border-radius:4px;
+                 display:none; z-index:200; font-size:15px; }
+        .empty { text-align:center; color:#888; padding:60px 20px; }
+        @media(max-width:600px) { body{padding:10px;} .add-row{flex-direction:column;} .search-row{flex-direction:column;} }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1 onclick="showList()">🍳 Recipe Book</h1>
+        <div style="display:flex;gap:8px;">
+            <button class="btn btn-gray" onclick="exportData()" title="Export recipes">⬇️</button>
+            <button class="btn btn-gray" onclick="document.getElementById('importFile').click()" title="Import recipes">⬆️</button>
+            <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+            <a href="https://ko-fi.com/yourname" target="_blank" class="btn btn-gray" title="Support" style="text-decoration:none;display:flex;align-items:center;">☕</a>
+            <button class="btn btn-gray" onclick="document.getElementById('settingsModal').classList.add('open')" title="Settings">⚙️</button>
+        </div>
+    </header>
+
+    <!-- List view -->
+    <div id="listView">
+        <div class="add-box">
+            <div class="add-row">
+                <input type="url" id="urlInput" placeholder="Paste recipe URL to scrape...">
+                <button class="btn" onclick="scrapeUrl()" id="scrapeBtn">Add from URL</button>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <button class="btn" style="flex:1" onclick="openAddModal()">✏️ Add Manually</button>
+            </div>
+            <div id="scrapeStatus" style="margin-top:10px;font-size:14px;"></div>
+            <p style="margin-top:10px;font-size:13px;color:#888;">
+                💡 If a URL doesn't work, try <a href="https://www.justtherecipe.com/" target="_blank" style="color:#8b4513;">JustTheRecipe.com</a> or <a href="https://video2recipe.com/" target="_blank" style="color:#8b4513;">Video2Recipe.com</a> first
+            </p>
+        </div>
+        <div class="search-row">
+            <input type="search" id="searchBox" placeholder="Search recipes..." oninput="renderList()">
+            <select id="sortBox" onchange="renderList()" style="width:auto;flex-shrink:0;">
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="az">A–Z</option>
+                <option value="category">Category</option>
+            </select>
+        </div>
+        <div id="recipeList"></div>
+    </div>
+
+    <!-- Recipe view -->
+    <div id="recipeView" style="display:none;"></div>
+</div>
+
+<!-- Add/Edit modal -->
+<div class="modal-bg" id="editModal">
+    <div class="modal">
+        <h2 id="modalTitle">Add Recipe</h2>
+        <input type="hidden" id="editId">
+        <label>Title *</label>
+        <input type="text" id="editTitleInput">
+        <label>Category</label>
+        <select id="editCategory">
+            <option>Other</option><option>Breakfast</option><option>Lunch</option>
+            <option>Dinner</option><option>Snack</option><option>Dessert</option><option>Condiment</option>
+        </select>
+        <label>Ingredients * (one per line)</label>
+        <textarea id="editIngredients" style="min-height:160px;"></textarea>
+        <label>Instructions * (one per line)</label>
+        <textarea id="editInstructions" style="min-height:160px;"></textarea>
+        <label>Notes</label>
+        <textarea id="editNotes" style="min-height:80px;"></textarea>
+        <label>Source URL</label>
+        <input type="url" id="editUrl">
+        <div style="display:flex;gap:10px;margin-top:20px;">
+            <button class="btn btn-dark" onclick="saveRecipe()">Save</button>
+            <button class="btn btn-gray" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-bg" id="settingsModal">
+    <div class="modal">
+        <h2>⚙️ Settings</h2>
+        <label>Recipe Book Name</label>
+        <input type="text" id="settingBookName" placeholder="🍳 Recipe Book">
+        <div style="display:flex;gap:10px;margin-top:20px;">
+            <button class="btn btn-dark" onclick="saveSettings()">Save</button>
+            <button class="btn btn-gray" onclick="document.getElementById('settingsModal').classList.remove('open')">Close</button>
+        </div>
+        <hr style="margin:20px 0;border-color:#eee;">
+        <h3 style="color:#2d5016;margin-bottom:10px;">Data</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn" onclick="exportData()">⬇️ Export Recipes</button>
+            <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Import Recipes</button>
+        </div>
+        <p style="margin-top:10px;font-size:13px;color:#888;">Export saves all your recipes as a JSON file you can back up or move to another device.</p>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── IndexedDB ──────────────────────────────────────────────
+const DB_NAME = 'recipebook', DB_VER = 1, STORE = 'recipes';
+let db;
+
+function openDB() {
+    return new Promise((res, rej) => {
+        const req = indexedDB.open(DB_NAME, DB_VER);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(STORE, {keyPath:'id'});
+        req.onsuccess = e => { db = e.target.result; res(db); };
+        req.onerror = e => rej(e);
+    });
+}
+
+function dbAll() {
+    return new Promise((res, rej) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).getAll();
+        req.onsuccess = () => res(req.result);
+        req.onerror = rej;
+    });
+}
+
+function dbPut(recipe) {
+    return new Promise((res, rej) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const req = tx.objectStore(STORE).put(recipe);
+        req.onsuccess = () => res(req.result);
+        req.onerror = rej;
+    });
+}
+
+function dbDelete(id) {
+    return new Promise((res, rej) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const req = tx.objectStore(STORE).delete(id);
+        req.onsuccess = res;
+        req.onerror = rej;
+    });
+}
+
+function newId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ── Render ─────────────────────────────────────────────────
+async function renderList() {
+    const all = await dbAll();
+    const q = document.getElementById('searchBox').value.toLowerCase();
+    const sort = document.getElementById('sortBox').value;
+    const catOrder = ['Breakfast','Lunch','Dinner','Snack','Dessert','Condiment','Other'];
+
+    let list = all.filter(r =>
+        r.title.toLowerCase().includes(q) ||
+        (r.category||'').toLowerCase().includes(q) ||
+        (r.ingredients||[]).some(i => i.toLowerCase().includes(q))
+    );
+
+    if (sort === 'newest') list.sort((a,b) => b.date.localeCompare(a.date));
+    else if (sort === 'oldest') list.sort((a,b) => a.date.localeCompare(b.date));
+    else if (sort === 'az') list.sort((a,b) => a.title.localeCompare(b.title));
+    else if (sort === 'category') list.sort((a,b) => catOrder.indexOf(a.category||'Other') - catOrder.indexOf(b.category||'Other'));
+
+    const el = document.getElementById('recipeList');
+    if (!list.length) {
+        el.innerHTML = '<div class="empty">No recipes yet. Add your first one!</div>';
+        return;
+    }
+    el.innerHTML = '<div class="recipe-grid">' + list.map(r => `
+        <div class="recipe-card" onclick="showRecipe('${r.id}')">
+            <h2>${esc(r.title)}</h2>
+            <span class="cat">${esc(r.category||'Other')}</span>
+        </div>`).join('') + '</div>';
+}
+
+let currentRecipeId = null;
+
+async function showRecipe(id) {
+    currentRecipeId = id;
+    const all = await dbAll();
+    const r = all.find(x => x.id === id);
+    if (!r) return;
+
+    document.getElementById('listView').style.display = 'none';
+    const view = document.getElementById('recipeView');
+    view.style.display = 'block';
+
+    const ingHtml = (r.ingredients||[]).map(i => `<li>${esc(i)}</li>`).join('');
+    const instHtml = (r.instructions||[]).map(i => `<li>${esc(i)}</li>`).join('');
+
+    view.innerHTML = `
+        <div class="recipe-view">
+            <h2>${esc(r.title)}</h2>
+            <p style="color:#888;margin-bottom:10px;">${esc(r.category||'Other')}</p>
+            <div class="actions" id="recipeActions" data-id="${r.id}">
+                <button class="btn" onclick="showList()">← Back</button>
+                <button class="btn btn-dark" onclick="openEditModal(currentRecipeId)">✏️ Edit</button>
+                <button class="btn" onclick="shareRecipe(currentRecipeId)">🔗 Share</button>
+                <button class="btn" onclick="exportPdf(currentRecipeId)">📄 PDF</button>
+                <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
+                ${r.url ? `<button class="btn btn-gray" onclick="window.open('${esc(r.url)}','_blank')">🌐 Original</button>` : ''}
+                <button class="btn btn-danger" onclick="deleteRecipe(currentRecipeId)">Delete</button>
+            </div>
+            <h3>Ingredients</h3>
+            <ul>${ingHtml}</ul>
+            <h3>Instructions</h3>
+            <ol>${instHtml}</ol>
+            ${r.notes ? `<div class="notes-display"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>` : ''}
+        </div>`;
+}
+
+function showList() {
+    document.getElementById('recipeView').style.display = 'none';
+    document.getElementById('listView').style.display = 'block';
+    renderList();
+}
+
+// ── Add from URL ───────────────────────────────────────────
+async function scrapeUrl() {
+    const url = document.getElementById('urlInput').value.trim();
+    const status = document.getElementById('scrapeStatus');
+    const btn = document.getElementById('scrapeBtn');
+    if (!url) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Scraping...';
+    status.innerHTML = '<span style="color:#666;">Fetching recipe...</span>';
+
+    try {
+        const res = await fetch('/api/scrape', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({url})
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            status.innerHTML = `<span style="color:#721c24;">❌ ${data.error} — try Add Manually instead.</span>`;
+        } else {
+            const recipe = {
+                id: newId(),
+                title: data.title,
+                category: 'Other',
+                ingredients: data.ingredients,
+                instructions: data.instructions,
+                notes: '',
+                url,
+                date: new Date().toISOString()
+            };
+            await dbPut(recipe);
+            document.getElementById('urlInput').value = '';
+            status.innerHTML = '<span style="color:#155724;">✅ Recipe added!</span>';
+            setTimeout(() => status.innerHTML = '', 3000);
+            renderList();
+        }
+    } catch(e) {
+        status.innerHTML = `<span style="color:#721c24;">❌ ${e.message}</span>`;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Add from URL';
+}
+
+// ── Add/Edit modal ─────────────────────────────────────────
+function openAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add Recipe';
+    document.getElementById('editId').value = '';
+    document.getElementById('editTitleInput').value = '';
+    document.getElementById('editCategory').value = 'Other';
+    document.getElementById('editIngredients').value = '';
+    document.getElementById('editInstructions').value = '';
+    document.getElementById('editNotes').value = '';
+    document.getElementById('editUrl').value = '';
+    document.getElementById('editModal').classList.add('open');
+}
+
+async function openEditModal(id) {
+    const all = await dbAll();
+    const r = all.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('modalTitle').textContent = 'Edit Recipe';
+    document.getElementById('editId').value = id;
+    document.getElementById('editTitleInput').value = r.title;
+    document.getElementById('editCategory').value = r.category || 'Other';
+    document.getElementById('editIngredients').value = (r.ingredients||[]).join('\n');
+    document.getElementById('editInstructions').value = (r.instructions||[]).join('\n');
+    document.getElementById('editNotes').value = r.notes || '';
+    document.getElementById('editUrl').value = r.url || '';
+    document.getElementById('editModal').classList.add('open');
+}
+
+function closeModal() {
+    document.getElementById('editModal').classList.remove('open');
+}
+
+async function saveRecipe() {
+    const id = document.getElementById('editId').value || newId();
+    const title = document.getElementById('editTitleInput').value.trim();
+    if (!title) { toast('Title is required'); return; }
+
+    const all = await dbAll();
+    const existing = all.find(x => x.id === id);
+
+    const recipe = {
+        id,
+        title,
+        category: document.getElementById('editCategory').value,
+        ingredients: document.getElementById('editIngredients').value.split('\n').map(s=>s.trim()).filter(Boolean),
+        instructions: document.getElementById('editInstructions').value.split('\n').map(s=>s.trim()).filter(Boolean),
+        notes: document.getElementById('editNotes').value.trim(),
+        url: document.getElementById('editUrl').value.trim(),
+        date: existing ? existing.date : new Date().toISOString()
+    };
+
+    await dbPut(recipe);
+    closeModal();
+    toast('Recipe saved!');
+    if (document.getElementById('recipeView').style.display !== 'none') {
+        showRecipe(id);
+    } else {
+        renderList();
+    }
+}
+
+// ── Delete ─────────────────────────────────────────────────
+async function deleteRecipe(id) {
+    if (!confirm('Delete this recipe?')) return;
+    await dbDelete(id);
+    toast('Recipe deleted');
+    showList();
+}
+
+// ── Share ──────────────────────────────────────────────────
+async function shareRecipe(id) {
+    const all = await dbAll();
+    const r = all.find(x => x.id === id);
+    if (!r) return;
+    try {
+        const res = await fetch('/api/share', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({recipe: r})
+        });
+        const data = await res.json();
+        if (data.shareId) {
+            const url = window.location.origin + '/shared/' + data.shareId;
+            navigator.clipboard.writeText(url).catch(()=>{});
+            toast('Share link copied! ' + url);
+        }
+    } catch(e) {
+        toast('Failed to create share link');
+    }
+}
+
+// ── PDF (print-to-PDF via browser) ────────────────────────
+async function exportPdf(id) {
+    printRecipe(id); // opens print dialog — user saves as PDF
+}
+
+// ── Print ──────────────────────────────────────────────────
+async function printRecipe(id) {
+    const all = await dbAll();
+    const r = all.find(x => x.id === id);
+    if (!r) return;
+    const w = window.open('', '_blank');
+    const ingHtml = (r.ingredients||[]).map(i=>`<li>${esc(i)}</li>`).join('');
+    const instHtml = (r.instructions||[]).map(i=>`<li>${esc(i)}</li>`).join('');
+    w.document.write(`<!DOCTYPE html><html><head><title>${esc(r.title)}</title>
+    <style>body{font-family:Georgia,serif;padding:20px;max-width:800px;margin:0 auto}
+    h1{color:#2d5016}h2{color:#2d5016;margin-top:20px}ul,ol{margin-left:20px}li{padding:5px 0}
+    .notes{margin-top:20px;padding:15px;background:#fff9e6;border-radius:4px}
+    </style></head><body>
+    <h1>${esc(r.title)}</h1><p><strong>Category:</strong> ${esc(r.category||'Other')}</p>
+    <h2>Ingredients</h2><ul>${ingHtml}</ul>
+    <h2>Instructions</h2><ol>${instHtml}</ol>
+    ${r.notes?`<div class="notes"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>`:''}
+    <script>window.print();<\/script></body></html>`);
+}
+
+// ── Export / Import ────────────────────────────────────────
+async function exportData() {
+    const all = await dbAll();
+    const blob = new Blob([JSON.stringify(all, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `recipes-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+}
+
+async function importData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+        const recipes = JSON.parse(text);
+        for (const r of recipes) {
+            if (!r.id) r.id = newId();
+            await dbPut(r);
+        }
+        toast(`Imported ${recipes.length} recipes`);
+        renderList();
+    } catch {
+        toast('Import failed — invalid file');
+    }
+    e.target.value = '';
+}
+
+// ── Import from share link ─────────────────────────────────
+async function checkImportParam() {
+    const params = new URLSearchParams(window.location.search);
+    const shareId = params.get('import');
+    if (!shareId) return;
+    try {
+        const res = await fetch(`/shared-json/${shareId}`);
+        if (res.ok) {
+            const recipe = await res.json();
+            recipe.id = newId();
+            recipe.date = new Date().toISOString();
+            recipe.notes = '';
+            await dbPut(recipe);
+            toast('Recipe saved to your book!');
+            window.history.replaceState({}, '', '/');
+            renderList();
+        }
+    } catch {}
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 3000);
+}
+
+// ── Settings ───────────────────────────────────────────────
+function loadSettings() {
+    const name = localStorage.getItem('bookName') || '🍳 Recipe Book';
+    document.querySelector('h1').textContent = name;
+    document.getElementById('settingBookName').value = name;
+}
+
+function saveSettings() {
+    const name = document.getElementById('settingBookName').value.trim() || '🍳 Recipe Book';
+    localStorage.setItem('bookName', name);
+    document.querySelector('h1').textContent = name;
+    document.getElementById('settingsModal').classList.remove('open');
+    toast('Settings saved!');
+}
+
+// ── Init ───────────────────────────────────────────────────
+openDB().then(async () => {
+    loadSettings();
+    await checkImportParam();
+    renderList();
+});
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
+}
+</script>
+</body>
+</html>

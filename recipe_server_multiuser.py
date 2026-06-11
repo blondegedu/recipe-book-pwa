@@ -509,53 +509,30 @@ MANUAL_FORM_HTML = '''<!DOCTYPE html>
             const text = document.getElementById('quickPasteText').value;
             if (!text.trim()) return;
             
-            // Split by double newlines first (paragraphs)
-            const paragraphs = text.split(/\\n\\n+/).map(p => p.trim()).filter(p => p);
-            
-            let title = '';
             let ingredients = [];
             let instructions = [];
             
-            for (let para of paragraphs) {
-                const lines = para.split('\\n').map(l => l.trim()).filter(l => l);
-                
-                for (let line of lines) {
-                    const lower = line.toLowerCase();
-                    
-                    // Skip section headers
-                    if (lower.includes('ingredient') || lower.includes('instruction') || lower.includes('direction')) {
-                        continue;
-                    }
-                    
-                    // Check if line starts with dash (instructions)
-                    if (line.startsWith('-')) {
-                        // Split by dashes
-                        const parts = line.split(/(?=-)/).map(p => p.replace(/^-\\s*/, '').trim()).filter(p => p);
-                        instructions.push(...parts);
-                    }
-                    // Check if line has multiple measurements (ingredients on one line)
-                    else if ((line.match(/\\d+\\s*(?:cup|tbsp|tsp|teaspoon|tablespoon)/gi) || []).length > 1) {
-                        // Split by looking for number + measurement patterns
-                        const parts = line.split(/(?=\\d+\\s*(?:\\/\\d+)?\\s*(?:cup|tbsp|tsp|teaspoon|tablespoon|oz|lb))/i)
-                            .map(p => p.trim())
-                            .filter(p => p && /\\d/.test(p));
-                        ingredients.push(...parts);
-                    }
-                    // Single ingredient or instruction
-                    else if (/\\d|cup|tbsp|tsp|oz|lb/.test(line)) {
-                        ingredients.push(line);
-                    }
-                    else if (/mix|add|bake|cook|heat|stir|combine|fold|refrigerate|preheat|place/i.test(line)) {
-                        instructions.push(line);
-                    }
-                    // First non-matching line is title
-                    else if (!title) {
-                        title = line;
+            // Split by blank lines to separate sections
+            const sections = text.split(/\\n\\s*\\n/).map(s => s.trim()).filter(s => s);
+            
+            for (let section of sections) {
+                // If section starts with dash, it's instructions
+                if (section.trim().startsWith('-')) {
+                    // Split by dash at start of line or after space
+                    const steps = section.split(/\\s*-/).map(s => s.trim()).filter(s => s);
+                    instructions.push(...steps);
+                }
+                // Otherwise it's ingredients - split by pattern: number followed by measurement
+                else {
+                    // Match pattern: optional number, fraction, measurement word
+                    const matches = section.match(/\\d+(?:\\s*\\/\\d+)?\\s*(?:cup|tbsp|tsp|teaspoon|tablespoon|oz|ounce|lb|pound|gram|kg|ml|liter)[^\\d]*/gi);
+                    if (matches && matches.length > 0) {
+                        ingredients.push(...matches.map(m => m.trim()));
                     }
                 }
             }
             
-            document.getElementById('title').value = title || 'Untitled Recipe';
+            document.getElementById('title').value = 'Untitled Recipe';
             document.getElementById('ingredients').value = ingredients.join('\\n');
             document.getElementById('instructions').value = instructions.join('\\n');
             
@@ -1261,35 +1238,88 @@ class RecipeHandler(BaseHTTPRequestHandler):
 </body>
 </html>'''
     
-    def get_shared_html(self, recipe):
+    def get_shared_html(self, recipe, share_id, viewer_user_id=None):
         ingredients_html = '<ul>' + ''.join(f'<li>{i}</li>' for i in recipe.get('ingredients', [])) + '</ul>'
         instructions_html = '<ol>' + ''.join(f'<li>{i}</li>' for i in recipe.get('instructions', [])) + '</ol>'
-        
+        title = recipe['title']
+        category = recipe.get('category', 'Other')
+        notes = recipe.get('notes', '')
+
+        copy_btn = ''
+        if viewer_user_id:
+            copy_btn = f'''<button onclick="copyToBook()" style="background:#2d5016;color:white;padding:12px 24px;border:none;border-radius:4px;cursor:pointer;font-size:16px;font-weight:bold;margin-right:10px;">➕ Copy to My Recipe Book</button>
+            <div id="copyStatus" style="display:inline-block;margin-left:10px;"></div>
+            <script>
+            async function copyToBook() {{
+                const res = await fetch('/api/copy-shared', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{shareId: '{share_id}'}})
+                }});
+                const data = await res.json();
+                const el = document.getElementById('copyStatus');
+                if (res.ok) {{
+                    el.innerHTML = '<span style="color:#155724;font-weight:bold;">✅ Added to your recipe book!</span>';
+                }} else {{
+                    el.innerHTML = '<span style="color:#721c24;">' + data.error + '</span>';
+                }}
+            }}
+            </script>'''
+        else:
+            copy_btn = '<a href="/login" style="background:#2d5016;color:white;padding:12px 24px;border-radius:4px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block;">➕ Save to My Recipe Book</a>'
+
         return f'''<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{recipe['title']}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - Recipe Book</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍳</text></svg>">
     <style>
-        body {{ font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f9f7f4; }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: Georgia, serif; background: #f9f7f4; padding: 20px; }}
+        .container {{ max-width: 800px; margin: 0 auto; }}
+        .top-bar {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }}
+        .brand {{ color: #2d5016; font-size: 22px; text-decoration: none; font-weight: bold; }}
         .recipe {{ background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 30px; }}
-        h1 {{ color: #2d5016; margin-bottom: 10px; }}
-        h2 {{ color: #2d5016; margin-top: 30px; margin-bottom: 15px; }}
-        ul, ol {{ margin-left: 20px; }}
-        li {{ margin-bottom: 8px; line-height: 1.6; }}
-        .notes {{ margin-top: 30px; padding: 15px; background: #f9f7f4; border-radius: 4px; }}
+        h1 {{ color: #2d5016; font-size: 28px; margin-bottom: 8px; }}
+        .category {{ color: #888; margin-bottom: 20px; font-size: 15px; }}
+        h2 {{ color: #2d5016; font-size: 20px; margin: 25px 0 12px; border-bottom: 2px solid #f4d03f; padding-bottom: 6px; }}
+        ul, ol {{ margin-left: 22px; }}
+        li {{ padding: 7px 0; line-height: 1.6; }}
+        .notes {{ margin-top: 25px; padding: 15px; background: #fff9e6; border-radius: 4px; border-left: 4px solid #f4d03f; }}
+        .actions {{ margin: 25px 0; padding: 20px; background: #f9f7f4; border-radius: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }}
+        .btn-print {{ background: #f4d03f; color: #333; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }}
+        .btn-print:hover {{ background: #f1c40f; }}
+        @media print {{
+            .actions, .top-bar {{ display: none; }}
+            body {{ background: white; padding: 0; }}
+            .recipe {{ box-shadow: none; }}
+        }}
+        @media (max-width: 600px) {{
+            body {{ padding: 10px; }}
+            .recipe {{ padding: 15px; }}
+        }}
     </style>
 </head>
 <body>
-    <div class="recipe">
-        <h1>{recipe['title']}</h1>
-        <p><strong>Category:</strong> {recipe.get('category', 'Other')}</p>
-        <h2>Ingredients</h2>
-        {ingredients_html}
-        <h2>Instructions</h2>
-        {instructions_html}
-        {f'<div class="notes"><strong>Notes:</strong><br>{recipe.get("notes", "")}</div>' if recipe.get('notes') else ''}
+    <div class="container">
+        <div class="top-bar">
+            <a href="/" class="brand">🍳 Recipe Book</a>
+        </div>
+        <div class="actions">
+            {copy_btn}
+            <button class="btn-print" onclick="window.print()">🖨️ Print</button>
+        </div>
+        <div class="recipe">
+            <h1>{title}</h1>
+            <p class="category">{category}</p>
+            <h2>Ingredients</h2>
+            {ingredients_html}
+            <h2>Instructions</h2>
+            {instructions_html}
+            {f'<div class="notes"><strong>Notes:</strong><br><br>{notes}</div>' if notes else ''}
+        </div>
     </div>
 </body>
 </html>'''
@@ -1447,10 +1477,11 @@ class RecipeHandler(BaseHTTPRequestHandler):
                 return
             
             recipe = shared[share_id]['recipe']
+            viewer_user_id = validate_session(self.get_session_token())
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write(self.get_shared_html(recipe).encode())
+            self.wfile.write(self.get_shared_html(recipe, share_id, viewer_user_id).encode())
         
         elif path.startswith('/pdf/'):
             user_id = self.require_auth()
@@ -1861,6 +1892,36 @@ class RecipeHandler(BaseHTTPRequestHandler):
                     }
                     save_users(users)
                     break
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': True}).encode())
+        
+        elif path == '/api/copy-shared':
+            user_id = self.require_auth()
+            if not user_id:
+                return
+            
+            length = int(self.headers['Content-Length'])
+            data = json.loads(self.rfile.read(length))
+            share_id = data.get('shareId', '')
+            
+            shared = load_shared()
+            if share_id not in shared:
+                self.send_response(404)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Share link not found'}).encode())
+                return
+            
+            recipe = dict(shared[share_id]['recipe'])
+            recipe['date'] = datetime.now().isoformat()
+            recipe['notes'] = ''
+            
+            recipes = load_recipes(user_id)
+            recipes.append(recipe)
+            save_recipes(user_id, recipes)
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
