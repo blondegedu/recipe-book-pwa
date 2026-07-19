@@ -22,8 +22,18 @@ def save_shared(shared):
         json.dump(shared, f, indent=2)
 
 def extract_recipe(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.google.com/',
+    }
     response = requests.get(url, headers=headers, timeout=15)
+
+    # Detect Cloudflare or bot-protection blocks (returns 403 with CF-Ray header)
+    if response.status_code == 403 and response.headers.get('CF-Ray'):
+        raise ValueError('cloudflare')
+
     response.raise_for_status()
     soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -270,6 +280,11 @@ class Handler(BaseHTTPRequestHandler):
                     send_json(self, 400, {
                         'error': "This looks like a roundup or blog post with multiple recipes. Try opening one of the individual recipe links on the page and pasting that URL instead.",
                         'blocked': False
+                    })
+                elif str(e) == 'cloudflare':
+                    send_json(self, 400, {
+                        'error': "This site blocks automated access (Cloudflare protection). Try copying the recipe manually, or find the same recipe on a different site.",
+                        'blocked': True
                     })
                 else:
                     send_json(self, 400, {'error': str(e), 'blocked': False})
