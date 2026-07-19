@@ -153,7 +153,7 @@
             <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Import Recipes</button>
         </div>
         <p style="margin-top:10px;font-size:13px;color:#888;">Export saves all your recipes as a JSON file you can back up or move to another device. Print All opens a printable version of every recipe.</p>
-        <div style="margin-top:15px;font-size:12px;color:#bbb;text-align:center;">Build v4 — TWA Test</div>
+        <div style="margin-top:15px;font-size:12px;color:#bbb;text-align:center;">Build v5 — TWA Test</div>
         <hr style="margin:20px 0;border-color:#eee;">
         <h3 style="color:#2d5016;margin-bottom:10px;">🐛 Bug Report</h3>
         <p style="font-size:13px;color:#888;margin-bottom:10px;">Something not working right? Let us know!</p>
@@ -549,13 +549,30 @@ function parseQuickPaste() {
     if (!text) return;
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const title = lines[0].replace(/^["'"]+|["'"]+$/g, '').trim() || 'Untitled Recipe';
+    const title = lines[0].replace(/^["'\u201c\u201d\u2018\u2019]+|["'\u201c\u201d\u2018\u2019]+$/g, '').trim() || 'Untitled Recipe';
 
-    // Strip leading quotes/bullets/numbers from any line (including smart quotes)
-    const clean = l => l.replace(/^[\u201c\u201d\u2018\u2019"'•*-]\s*/, '').replace(/^\d+[.)]\s*/, '').trim();
+    const clean = l => l
+        .replace(/^[\u201c\u201d\u2018\u2019"'•*\-]\s*/, '')
+        .replace(/^\d+[.)]\s*/, '')
+        .trim();
 
-    const ingHeader = l => /^ingredients?\s*:/i.test(l);
-    const instHeader = l => /^instructions?|^directions?|^method|^how to|^steps?/i.test(l);
+    // More flexible header detection
+    const ingHeader = l => /^ingredients?(\s*:)?$/i.test(l.trim()) ||
+                           /^what you.ll need/i.test(l) ||
+                           /^you.ll need/i.test(l);
+    const instHeader = l => /^instructions?(\s*:)?$/i.test(l.trim()) ||
+                            /^directions?(\s*:)?$/i.test(l.trim()) ||
+                            /^method(\s*:)?$/i.test(l.trim()) ||
+                            /^how to(\s*:)?$/i.test(l.trim()) ||
+                            /^steps?(\s*:)?$/i.test(l.trim()) ||
+                            /^preparation(\s*:)?$/i.test(l.trim());
+
+    // Heuristic: does a line look like an ingredient?
+    const looksLikeIngredient = l => {
+        const lower = l.toLowerCase();
+        return /^\d|^[\u00bc\u00bd\u00be\u2153\u2154\u2155\u2156\u2157\u2158\u2159\u215a\u215b\u215c\u215d\u215e]/.test(l) ||
+               /\b(cup|cups|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|g |ml|liter|pinch|dash|handful|clove|slice|piece|can|package|pkg)\b/.test(lower);
+    };
 
     let ingredients = [], instructions = [], mode = null;
 
@@ -571,6 +588,14 @@ function parseQuickPaste() {
             ingredients.push(line);
         } else if (mode === 'inst') {
             instructions.push(line);
+        } else {
+            // No header found yet — use heuristics
+            if (looksLikeIngredient(line)) {
+                ingredients.push(line);
+            } else if (line.length > 40) {
+                // Long lines without measurements are likely instructions
+                instructions.push(line);
+            }
         }
     }
 

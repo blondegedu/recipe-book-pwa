@@ -27,15 +27,17 @@ def extract_recipe(url):
     response.raise_for_status()
     soup = BeautifulSoup(response.content, 'html.parser')
 
-    # Try JSON-LD first
+    # ── 1. JSON-LD ──────────────────────────────────────────
     for script in soup.find_all('script', type='application/ld+json'):
         try:
             data = json.loads(script.string)
+            # Flatten @graph
             if isinstance(data, dict) and '@graph' in data:
                 for item in data['@graph']:
-                    if item.get('@type') == 'Recipe':
+                    if isinstance(item, dict) and item.get('@type') == 'Recipe':
                         data = item
                         break
+            # Flatten list
             if isinstance(data, list):
                 for item in data:
                     if isinstance(item, dict) and item.get('@type') == 'Recipe':
@@ -50,9 +52,16 @@ def extract_recipe(url):
                     if isinstance(inst, str):
                         instructions.append(inst)
                     elif isinstance(inst, dict):
-                        text = inst.get('text', '') or inst.get('name', '')
-                        if text:
-                            instructions.append(text)
+                        # HowToStep may nest further
+                        if inst.get('@type') == 'HowToSection':
+                            for step in inst.get('itemListElement', []):
+                                text = step.get('text', '') or step.get('name', '')
+                                if text:
+                                    instructions.append(text)
+                        else:
+                            text = inst.get('text', '') or inst.get('name', '')
+                            if text:
+                                instructions.append(text)
                 if ingredients and instructions:
                     return {
                         'title': data.get('name', 'Untitled Recipe'),
@@ -62,7 +71,42 @@ def extract_recipe(url):
         except:
             continue
 
-    # Fallback HTML parsing
+    # ── 2. WPRM (WP Recipe Maker) ───────────────────────────
+    wprm_ingredients = soup.select('.wprm-recipe-ingredient')
+    wprm_instructions = soup.select('.wprm-recipe-instruction-text')
+    if wprm_ingredients and wprm_instructions:
+        title_el = soup.select_one('.wprm-recipe-name') or soup.select_one('h1')
+        title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
+        ingredients = []
+        for item in wprm_ingredients:
+            amount = item.select_one('.wprm-recipe-ingredient-amount')
+            unit = item.select_one('.wprm-recipe-ingredient-unit')
+            name = item.select_one('.wprm-recipe-ingredient-name')
+            notes = item.select_one('.wprm-recipe-ingredient-notes')
+            parts = [x.get_text().strip() for x in [amount, unit, name, notes] if x and x.get_text().strip()]
+            line = ' '.join(parts)
+            if line:
+                ingredients.append(line)
+        instructions = [i.get_text().strip() for i in wprm_instructions if i.get_text().strip()]
+        if ingredients and instructions:
+            return {'title': title, 'ingredients': ingredients, 'instructions': instructions}
+
+    # ── 3. Tasty / other recipe card plugins ────────────────
+    for ing_sel, inst_sel in [
+        ('[itemprop="recipeIngredient"]', '[itemprop="recipeInstructions"] li'),
+        ('.tasty-recipes-ingredients li', '.tasty-recipes-instructions li'),
+        ('.recipe-ingredients li', '.recipe-instructions li'),
+        ('.ingredients li', '.instructions li'),
+        ('.ingredient', '.instruction'),
+    ]:
+        ings = [i.get_text().strip() for i in soup.select(ing_sel) if i.get_text().strip()]
+        insts = [i.get_text().strip() for i in soup.select(inst_sel) if i.get_text().strip()]
+        if ings and insts:
+            title_el = soup.select_one('h1')
+            title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
+            return {'title': title, 'ingredients': ings, 'instructions': insts}
+
+    # ── 4. Last resort — generic heuristic ──────────────────
     title = 'Untitled Recipe'
     for sel in ['h1.recipe-title', 'h1.headline', 'h1']:
         el = soup.select_one(sel)
@@ -76,7 +120,6 @@ def extract_recipe(url):
         if items:
             ingredients = [i.get_text().strip() for i in items if i.get_text().strip()]
             break
-
     for sel in ['.recipe-instructions li', '.instructions li', 'ol li']:
         items = soup.select(sel)
         if items and len(items) > 2:
