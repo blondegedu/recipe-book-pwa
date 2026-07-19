@@ -74,7 +74,7 @@
     <div id="listView">
         <div class="add-box">
             <div class="add-row">
-                <input type="url" id="urlInput" placeholder="Paste recipe URL to scrape...">
+                <input type="url" id="urlInput" placeholder="Paste recipe URL to scrape..." onkeydown="if(event.key==='Enter')scrapeUrl()">
                 <button class="btn" onclick="scrapeUrl()" id="scrapeBtn">Add from URL</button>
             </div>
             <div style="display:flex;gap:10px;">
