@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.teakettleuprising.recipebook",
+    "sha256_cert_fingerprints": [
+      "C3:5B:F9:16:BA:F3:45:0B:65:4D:8A:DC:E2:28:38:16:E5:CD:05:74:C7:35:8C:AB:38:B4:35:F1:CB:AB:F9:5A"
+    ]
+  }
+}]

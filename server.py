@@ -113,6 +113,13 @@ class Handler(BaseHTTPRequestHandler):
             with open('index.html', 'rb') as f:
                 self.wfile.write(f.read())
 
+        elif path == '/.well-known/assetlinks.json':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            with open('assetlinks.json', 'rb') as f:
+                self.wfile.write(f.read())
+
         elif path == '/manifest.json':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
