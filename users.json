@@ -1,14 +1,1 @@
-{
-  "blondegedu@aol.com": {
-    "user_id": "2KylRL1o71STVDjLdU9noA",
-    "password": "4f9dee45a7cf73caae3b03efa101336f711e0774fc9f42ad2f4eda018f210540",
-    "book_name": "\ud83c\udf73 Recipe Book",
-    "created": "2026-03-08T18:53:50.350374"
-  },
-  "autotest@example.com": {
-    "user_id": "mz70zlHPs4FQK4T6phHpUg",
-    "password": "ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae",
-    "book_name": "\ud83e\udd16 Automated Test Kitchen",
-    "created": "2026-03-08T19:37:37.032507"
-  }
-}
+{}
