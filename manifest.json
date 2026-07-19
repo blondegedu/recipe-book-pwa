@@ -2,7 +2,7 @@
   "name": "Recipe Book",
   "short_name": "Recipes",
   "description": "Your personal recipe collection",
-  "start_url": "/",
+  "start_url": "https://recipe-book-pwa.onrender.com/",
   "display": "standalone",
   "background_color": "#f9f7f4",
   "theme_color": "#f4d03f",
