@@ -627,6 +627,11 @@ function parseQuickPaste() {
         }
     }
 
+    if (title === 'Untitled Recipe') {
+        const userTitle = prompt('Recipe name not found in pasted text. What should we call this recipe?');
+        if (userTitle && userTitle.trim()) title = userTitle.trim();
+    }
+
     document.getElementById('editTitleInput').value = title;
     document.getElementById('editIngredients').value = ingredients.join('\n');
     document.getElementById('editInstructions').value = instructions.join('\n');
