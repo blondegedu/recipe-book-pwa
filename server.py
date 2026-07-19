@@ -28,6 +28,31 @@ def extract_recipe(url):
     soup = BeautifulSoup(response.content, 'html.parser')
 
     # ── 1. JSON-LD ──────────────────────────────────────────
+    # First pass: check if any JSON-LD block indicates this is a roundup/blog page
+    roundup_types = {'BlogPosting', 'Article', 'NewsArticle', 'CollectionPage'}
+    for script in soup.find_all('script', type='application/ld+json'):
+        try:
+            data = json.loads(script.string)
+            page_types = set()
+            if isinstance(data, dict):
+                if '@graph' in data:
+                    for item in data['@graph']:
+                        if isinstance(item, dict):
+                            page_types.add(item.get('@type', ''))
+                else:
+                    page_types.add(data.get('@type', ''))
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict):
+                        page_types.add(item.get('@type', ''))
+            if page_types & roundup_types and 'Recipe' not in page_types:
+                raise ValueError('roundup')
+        except ValueError:
+            raise  # re-raise roundup error, don't swallow it
+        except Exception:
+            continue
+
+    # Second pass: extract recipe from JSON-LD
     for script in soup.find_all('script', type='application/ld+json'):
         try:
             data = json.loads(script.string)
@@ -68,7 +93,9 @@ def extract_recipe(url):
                         'ingredients': [i for i in ingredients if i],
                         'instructions': [i for i in instructions if i]
                     }
-        except:
+        except ValueError:
+            raise  # re-raise roundup error
+        except Exception:
             continue
 
     # ── 2. WPRM (WP Recipe Maker) ───────────────────────────
@@ -97,10 +124,10 @@ def extract_recipe(url):
     if webflow_ing and webflow_dir:
         title_el = soup.select_one('h1')
         title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
-        ingredients = [p.get_text().strip() for p in webflow_ing.find_all(['p','li'])
-                      if p.get_text().strip() and not p.get_text().strip().endswith(':')]
-        instructions = [p.get_text().strip() for p in webflow_dir.find_all(['p','li'])
+        ingredients = [p.get_text().strip() for p in webflow_ing.find_all(['p', 'li'])
                        if p.get_text().strip() and not p.get_text().strip().endswith(':')]
+        instructions = [p.get_text().strip() for p in webflow_dir.find_all(['p', 'li'])
+                        if p.get_text().strip() and not p.get_text().strip().endswith(':')]
         if ingredients and instructions:
             return {'title': title, 'ingredients': ingredients, 'instructions': instructions}
 
@@ -119,7 +146,7 @@ def extract_recipe(url):
             title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
             return {'title': title, 'ingredients': ings, 'instructions': insts}
 
-    # ── 4. Last resort — generic heuristic ──────────────────
+    # ── 5. Last resort — generic heuristic ──────────────────
     title = 'Untitled Recipe'
     for sel in ['h1.recipe-title', 'h1.headline', 'h1']:
         el = soup.select_one(sel)
@@ -238,6 +265,14 @@ class Handler(BaseHTTPRequestHandler):
                     send_json(self, 400, {'error': 'Could not extract recipe from this site.', 'blocked': True})
                     return
                 send_json(self, 200, recipe)
+            except ValueError as e:
+                if str(e) == 'roundup':
+                    send_json(self, 400, {
+                        'error': "This looks like a roundup or blog post with multiple recipes. Try opening one of the individual recipe links on the page and pasting that URL instead.",
+                        'blocked': False
+                    })
+                else:
+                    send_json(self, 400, {'error': str(e), 'blocked': False})
             except Exception as e:
                 err = str(e)
                 blocked = any(c in err for c in ['402', '403', 'Forbidden', 'Payment'])
