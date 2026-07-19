@@ -206,6 +206,13 @@ class Handler(BaseHTTPRequestHandler):
             with open('index.html', 'rb') as f:
                 self.wfile.write(f.read())
 
+        elif path == '/privacy' or path == '/privacy.html':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            with open('privacy.html', 'rb') as f:
+                self.wfile.write(f.read())
+
         elif path == '/.well-known/assetlinks.json':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
