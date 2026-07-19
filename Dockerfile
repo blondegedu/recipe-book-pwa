@@ -6,5 +6,7 @@ COPY server.py .
 COPY index.html .
 COPY manifest.json .
 COPY service-worker.js .
+COPY icon-512.png .
+COPY feature-graphic.png .
 EXPOSE 8080
 CMD ["python", "server.py"]
