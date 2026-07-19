@@ -52,7 +52,6 @@ def extract_recipe(url):
                     if isinstance(inst, str):
                         instructions.append(inst)
                     elif isinstance(inst, dict):
-                        # HowToStep may nest further
                         if inst.get('@type') == 'HowToSection':
                             for step in inst.get('itemListElement', []):
                                 text = step.get('text', '') or step.get('name', '')
@@ -62,6 +61,7 @@ def extract_recipe(url):
                             text = inst.get('text', '') or inst.get('name', '')
                             if text:
                                 instructions.append(text)
+                # Only use JSON-LD if BOTH ingredients and instructions are present
                 if ingredients and instructions:
                     return {
                         'title': data.get('name', 'Untitled Recipe'),
@@ -91,7 +91,20 @@ def extract_recipe(url):
         if ingredients and instructions:
             return {'title': title, 'ingredients': ingredients, 'instructions': instructions}
 
-    # ── 3. Tasty / other recipe card plugins ────────────────
+    # ── 3. Webflow / custom sites (p tags instead of li) ────
+    webflow_ing = soup.select_one('article.ingredients-list, .ingredients-card')
+    webflow_dir = soup.select_one('div.directions-list, .directions-wrapper')
+    if webflow_ing and webflow_dir:
+        title_el = soup.select_one('h1')
+        title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
+        ingredients = [p.get_text().strip() for p in webflow_ing.find_all(['p','li'])
+                      if p.get_text().strip() and not p.get_text().strip().endswith(':')]
+        instructions = [p.get_text().strip() for p in webflow_dir.find_all(['p','li'])
+                       if p.get_text().strip() and not p.get_text().strip().endswith(':')]
+        if ingredients and instructions:
+            return {'title': title, 'ingredients': ingredients, 'instructions': instructions}
+
+    # ── 4. Tasty / other recipe card plugins ────────────────
     for ing_sel, inst_sel in [
         ('[itemprop="recipeIngredient"]', '[itemprop="recipeInstructions"] li'),
         ('.tasty-recipes-ingredients li', '.tasty-recipes-instructions li'),
