@@ -616,6 +616,10 @@ function parseQuickPaste() {
 
     let ingredients = [], instructions = [], notes = [], mode = null;
 
+    // First pass: check if text has an explicit ingredients header
+    let hasIngHeader = false;
+    for (const l of lines) { if (ingHeader(clean(l))) { hasIngHeader = true; break; } }
+
     for (let i = startIdx; i < lines.length; i++) {
         const raw = lines[i];
         const line = clean(raw);
@@ -636,8 +640,16 @@ function parseQuickPaste() {
             instructions.push(line);
         } else if (mode === 'notes') {
             notes.push(line);
+        } else if (!hasIngHeader) {
+            // No "Ingredients" header in text — use heuristics for pre-header lines
+            if (looksLikeIngredient(line)) {
+                ingredients.push(line);
+            } else if (ingredients.length > 0 && line.length < 120 && !line.includes('. ')) {
+                // Continuation of ingredient-like content (e.g. "optional: ..." lines)
+                ingredients.push(line);
+            }
         }
-        // Before any header is found, skip everything (it's metadata/junk)
+        // If hasIngHeader but we haven't reached it yet, skip (it's metadata)
     }
 
     // Fallback: if no section headers were found, use heuristics
