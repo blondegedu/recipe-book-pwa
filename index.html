@@ -549,7 +549,6 @@ function parseQuickPaste() {
     if (!text) return;
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const title = lines[0].replace(/^["'\u201c\u201d\u2018\u2019]+|["'\u201c\u201d\u2018\u2019]+$/g, '').trim() || 'Untitled Recipe';
 
     const clean = l => l
         .replace(/^[\u201c\u201d\u2018\u2019"'•*\-]\s*/, '')
@@ -567,6 +566,19 @@ function parseQuickPaste() {
                             /^steps?(\s*:)?$/i.test(l.trim()) ||
                             /^preparation(\s*:)?$/i.test(l.trim());
 
+    // Lines to skip — UI junk from recipe sites
+    const isJunkLine = l => {
+        const lower = l.toLowerCase().trim();
+        if (lower.length <= 2) return true;
+        const junkExact = ['units', 'unit', 'us', 'm', 'metric', 'imperial', 'on off', 'off on',
+                           'print', 'save', 'share', 'jump to recipe', 'nutrition', 'calories', 'scale'];
+        if (junkExact.includes(lower)) return true;
+        if (/^cook mode/i.test(lower)) return true;
+        if (/^prevent your screen/i.test(lower)) return true;
+        if (/^servings?\s*:?\s*$/i.test(lower)) return true;
+        return false;
+    };
+
     // Heuristic: does a line look like an ingredient?
     const looksLikeIngredient = l => {
         const lower = l.toLowerCase();
@@ -574,9 +586,20 @@ function parseQuickPaste() {
                /\b(cup|cups|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|g |ml|liter|pinch|dash|handful|clove|slice|piece|can|package|pkg)\b/.test(lower);
     };
 
+    // Determine title: use first line unless it's a section header
+    let startIdx = 0;
+    let title = 'Untitled Recipe';
+    if (ingHeader(lines[0]) || instHeader(lines[0])) {
+        // First line is a header, not a title — look for a real title or use Untitled
+        startIdx = 0; // will be caught by header detection in the loop
+    } else {
+        title = lines[0].replace(/^["'\u201c\u201d\u2018\u2019]+|["'\u201c\u201d\u2018\u2019]+$/g, '').trim() || 'Untitled Recipe';
+        startIdx = 1;
+    }
+
     let ingredients = [], instructions = [], mode = null;
 
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = startIdx; i < lines.length; i++) {
         const raw = lines[i];
         const line = clean(raw);
         if (!line) continue;
@@ -584,13 +607,18 @@ function parseQuickPaste() {
         if (ingHeader(line)) { mode = 'ing'; continue; }
         if (instHeader(line)) { mode = 'inst'; continue; }
 
+        // Skip junk lines (UI artifacts from copy-paste)
+        if (isJunkLine(line)) continue;
+
         if (mode === 'ing') {
-            ingredients.push(line);
+            // Skip lines in ingredient section that are clearly not ingredients
+            if (!isJunkLine(line)) ingredients.push(line);
         } else if (mode === 'inst') {
             instructions.push(line);
         } else {
             // No header found yet — use heuristics
             if (looksLikeIngredient(line)) {
+                if (mode === null) mode = 'ing'; // auto-enter ingredient mode
                 ingredients.push(line);
             } else if (line.length > 40) {
                 // Long lines without measurements are likely instructions
