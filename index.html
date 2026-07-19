@@ -40,6 +40,10 @@
         .recipe-view ul, .recipe-view ol { margin-left:22px; }
         .recipe-view li { padding:6px 0; line-height:1.6; }
         .actions { display:flex; gap:8px; flex-wrap:wrap; margin:20px 0; }
+        @media(max-width:600px) {
+            .actions { gap:6px; }
+            .actions .btn { flex:1 1 auto; min-width:0; text-align:center; padding:12px 14px; font-size:14px; }
+        }
         .notes-box { margin-top:20px; }
         .notes-box textarea { min-height:80px; }
         .notes-display { margin-top:20px; padding:15px; background:#fff9e6;
@@ -261,19 +265,21 @@ async function showRecipe(id) {
         <div class="recipe-view">
             <h2>${esc(r.title)}</h2>
             <p style="color:#888;margin-bottom:10px;">${esc(r.category||'Other')}</p>
-            <div class="actions" id="recipeActions" data-id="${r.id}">
+            <div class="actions">
                 <button class="btn" onclick="showList()">← Back</button>
                 <button class="btn btn-dark" onclick="openEditModal(currentRecipeId)">✏️ Edit</button>
-                <button class="btn" onclick="exportPdf(currentRecipeId)">📄 PDF</button>
                 <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
-                ${r.url ? `<button class="btn btn-gray" onclick="window.open('${esc(r.url)}','_blank')">🌐 Original</button>` : ''}
-                <button class="btn btn-danger" onclick="deleteRecipe(currentRecipeId)">Delete</button>
+                <button class="btn" onclick="shareAsHtml(currentRecipeId)">📤 Share</button>
             </div>
             <h3>Ingredients</h3>
             <ul>${ingHtml}</ul>
             <h3>Instructions</h3>
             <ol>${instHtml}</ol>
             ${r.notes ? `<div class="notes-display"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>` : ''}
+            <div class="actions" style="margin-top:30px;padding-top:20px;border-top:1px solid #eee;">
+                ${r.url ? `<button class="btn btn-gray" onclick="window.open('${esc(r.url)}','_blank')">🌐 Original</button>` : ''}
+                <button class="btn btn-danger" onclick="deleteRecipe(currentRecipeId)">🗑️ Delete</button>
+            </div>
         </div>`;
 }
 
@@ -418,9 +424,104 @@ async function shareRecipe(id) {
     }
 }
 
-// ── PDF (print-to-PDF via browser) ────────────────────────
-async function exportPdf(id) {
-    printRecipe(id); // opens print dialog — user saves as PDF
+// ── Share as HTML file ─────────────────────────────────────
+async function shareAsHtml(id) {
+    const all = await dbAll();
+    const r = all.find(x => x.id === id);
+    if (!r) return;
+
+    const ingHtml = (r.ingredients||[]).map(i => `<li>${esc(i)}</li>`).join('');
+    const instHtml = (r.instructions||[]).map(i => `<li>${esc(i)}</li>`).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${esc(r.title)} - Recipe Book</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Georgia, serif; background: #f9f7f4; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+        .logo { width:40px; height:40px; background:#2d5016; border-radius:8px; display:flex;
+                 align-items:center; justify-content:center; font-size:24px; }
+        .brand { color:#2d5016; font-size:22px; font-weight:bold; text-decoration:none; }
+        .recipe { background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); padding:30px; }
+        h1 { color:#2d5016; font-size:28px; margin-bottom:8px; }
+        .category { color:#888; margin-bottom:20px; }
+        h2 { color:#2d5016; font-size:20px; margin:25px 0 12px; border-bottom:2px solid #f4d03f; padding-bottom:6px; }
+        ul, ol { margin-left:22px; }
+        li { padding:7px 0; line-height:1.6; }
+        .notes { margin-top:25px; padding:15px; background:#fff9e6; border-radius:4px; border-left:4px solid #f4d03f; }
+        .actions { margin:20px 0; display:flex; gap:10px; flex-wrap:wrap; }
+        .btn { padding:12px 24px; border:none; border-radius:4px; cursor:pointer; font-size:16px;
+               font-weight:bold; text-decoration:none; display:inline-block; }
+        .btn-print { background:#f4d03f; color:#333; }
+        .btn-print:hover { background:#f1c40f; }
+        .footer { margin-top:30px; padding-top:20px; border-top:1px solid #eee; text-align:center; }
+        .footer p { color:#888; font-size:14px; margin-bottom:8px; }
+        .footer a { color:#2d5016; font-weight:bold; text-decoration:none; }
+        .footer a:hover { text-decoration:underline; }
+        @media print { .actions, .footer { display:none; } body { background:white; padding:0; } .recipe { box-shadow:none; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🍳</div>
+            <span class="brand">Recipe Book</span>
+        </div>
+        <div class="actions">
+            <button class="btn btn-print" onclick="window.print()">🖨️ Print Recipe</button>
+        </div>
+        <div class="recipe">
+            <h1>${esc(r.title)}</h1>
+            <p class="category">${esc(r.category || 'Other')}</p>
+            <h2>Ingredients</h2>
+            <ul>${ingHtml}</ul>
+            <h2>Instructions</h2>
+            <ol>${instHtml}</ol>
+            ${r.notes ? `<div class="notes"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>` : ''}
+        </div>
+        <div class="footer">
+            <p>Shared from <strong>Recipe Book</strong></p>
+            <a href="https://play.google.com/store/apps/details?id=com.teakettleuprising.recipebook" target="_blank">
+                📲 Get Recipe Book on Google Play
+            </a>
+        </div>
+    </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const fileName = (r.title || 'recipe').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '-') + '.html';
+    const file = new File([blob], fileName, { type: 'text/html' });
+
+    // Use Web Share API if available (mobile)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({
+                title: r.title,
+                text: `Check out this recipe: ${r.title}`,
+                files: [file]
+            });
+            return;
+        } catch(e) {
+            if (e.name === 'AbortError') return; // user cancelled
+        }
+    }
+
+    // Fallback: download the file
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Recipe downloaded as HTML — share it with anyone!');
 }
 
 // ── Print ──────────────────────────────────────────────────
