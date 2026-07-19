@@ -550,12 +550,12 @@ function parseQuickPaste() {
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
+    // Strip checkbox chars and bullets
     const clean = l => l
-        .replace(/^[\u201c\u201d\u2018\u2019"'•*\-]\s*/, '')
-        .replace(/^\d+[.)]\s*/, '')
+        .replace(/^[\u25a2\u2610\u2611\u2612\u25cb\u25cf\u201c\u201d\u2018\u2019"'•*▢☐☑☒]\s*/g, '')
         .trim();
 
-    // More flexible header detection
+    // Section header detection
     const ingHeader = l => /^ingredients?(\s*:)?$/i.test(l.trim()) ||
                            /^what you.ll need/i.test(l) ||
                            /^you.ll need/i.test(l);
@@ -565,17 +565,27 @@ function parseQuickPaste() {
                             /^how to(\s*:)?$/i.test(l.trim()) ||
                             /^steps?(\s*:)?$/i.test(l.trim()) ||
                             /^preparation(\s*:)?$/i.test(l.trim());
+    const notesHeader = l => /^notes?(\s*:)?$/i.test(l.trim()) ||
+                             /^tips?(\s*:)?$/i.test(l.trim()) ||
+                             /^cook.?s?\s*notes?/i.test(l.trim());
 
     // Lines to skip — UI junk from recipe sites
     const isJunkLine = l => {
         const lower = l.toLowerCase().trim();
         if (lower.length <= 2) return true;
         const junkExact = ['units', 'unit', 'us', 'm', 'metric', 'imperial', 'on off', 'off on',
-                           'print', 'save', 'share', 'jump to recipe', 'nutrition', 'calories', 'scale'];
+                           'print', 'save', 'share', 'jump to recipe', 'nutrition', 'calories', 'scale',
+                           'us customary', 'print recipe', 'pin recipe', 'video', 'equipment',
+                           '1x', '2x', '3x', '4x'];
         if (junkExact.includes(lower)) return true;
         if (/^cook mode/i.test(lower)) return true;
         if (/^prevent your screen/i.test(lower)) return true;
         if (/^servings?\s*:?\s*$/i.test(lower)) return true;
+        if (/^\d+\s*from\s*\d+\s*votes?/i.test(lower)) return true;
+        if (/^(prep|cook|total)\s*time/i.test(lower)) return true;
+        if (/^\d+\s*(minutes?|mins?|hours?|hrs?)\s*(minutes?|mins?|hours?|hrs?)?$/i.test(lower)) return true;
+        if (/^(course|cuisine|servings?|calories|yield)/i.test(lower) && lower.length < 30) return true;
+        if (/^\d+\s*(kcal|calories|servings?|cookies?|pieces?|slices?)$/i.test(lower)) return true;
         return false;
     };
 
@@ -586,18 +596,25 @@ function parseQuickPaste() {
                /\b(cup|cups|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|g |ml|liter|pinch|dash|handful|clove|slice|piece|can|package|pkg)\b/.test(lower);
     };
 
+    // Detect ingredient callout lines some sites put after each instruction step
+    const isIngredientCallout = l => {
+        if (l.length > 80) return false;
+        if (l.includes('.')) return false; // real sentences have periods
+        const parts = l.split(',');
+        return parts.length >= 1 && parts.every(p => looksLikeIngredient(p.trim()));
+    };
+
     // Determine title: use first line unless it's a section header
     let startIdx = 0;
     let title = 'Untitled Recipe';
     if (ingHeader(lines[0]) || instHeader(lines[0])) {
-        // First line is a header, not a title — look for a real title or use Untitled
-        startIdx = 0; // will be caught by header detection in the loop
+        startIdx = 0;
     } else {
         title = lines[0].replace(/^["'\u201c\u201d\u2018\u2019]+|["'\u201c\u201d\u2018\u2019]+$/g, '').trim() || 'Untitled Recipe';
         startIdx = 1;
     }
 
-    let ingredients = [], instructions = [], mode = null;
+    let ingredients = [], instructions = [], notes = [], mode = null;
 
     for (let i = startIdx; i < lines.length; i++) {
         const raw = lines[i];
@@ -606,22 +623,31 @@ function parseQuickPaste() {
 
         if (ingHeader(line)) { mode = 'ing'; continue; }
         if (instHeader(line)) { mode = 'inst'; continue; }
+        if (notesHeader(line)) { mode = 'notes'; continue; }
 
-        // Skip junk lines (UI artifacts from copy-paste)
+        // Skip junk lines
         if (isJunkLine(line)) continue;
 
         if (mode === 'ing') {
-            // Skip lines in ingredient section that are clearly not ingredients
-            if (!isJunkLine(line)) ingredients.push(line);
+            ingredients.push(line);
         } else if (mode === 'inst') {
+            // Skip ingredient callout lines (e.g. "1 cup butter" or "2 eggs,1 tsp vanilla")
+            if (isIngredientCallout(line)) continue;
             instructions.push(line);
-        } else {
-            // No header found yet — use heuristics
+        } else if (mode === 'notes') {
+            notes.push(line);
+        }
+        // Before any header is found, skip everything (it's metadata/junk)
+    }
+
+    // Fallback: if no section headers were found, use heuristics
+    if (!ingredients.length && !instructions.length) {
+        for (let i = startIdx; i < lines.length; i++) {
+            const line = clean(lines[i]);
+            if (!line || isJunkLine(line)) continue;
             if (looksLikeIngredient(line)) {
-                if (mode === null) mode = 'ing'; // auto-enter ingredient mode
                 ingredients.push(line);
             } else if (line.length > 40) {
-                // Long lines without measurements are likely instructions
                 instructions.push(line);
             }
         }
@@ -635,6 +661,12 @@ function parseQuickPaste() {
     document.getElementById('editTitleInput').value = title;
     document.getElementById('editIngredients').value = ingredients.join('\n');
     document.getElementById('editInstructions').value = instructions.join('\n');
+    const notesField = document.getElementById('editNotes');
+    if (notesField && notes.length) {
+        notesField.value = notes.join('\n');
+    } else if (notes.length) {
+        document.getElementById('editInstructions').value += '\n\nNotes:\n' + notes.join('\n');
+    }
     document.getElementById('quickPasteText').value = '';
     toast('Parsed! Review and adjust as needed.');
 }
