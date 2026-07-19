@@ -569,6 +569,9 @@ function parseQuickPaste() {
     const notesHeader = l => /^notes(\s*:)?$/i.test(l.trim()) ||
                              /^tips(\s*:)?$/i.test(l.trim()) ||
                              /^cook.?s?\s*notes/i.test(l.trim());
+    // Sub-section headers (e.g. "For the frosting:", "For the dressing:")
+    const isSubHeader = l => /^for (the|your)\s+.+:$/i.test(l.trim()) ||
+                             /^(frosting|glaze|sauce|dressing|filling|topping|crust|marinade|garnish|batter|dough|icing|syrup|drizzle|assembly|to serve)\s*:$/i.test(l.trim());
 
     // Lines to skip — UI junk from recipe sites
     const isJunkLine = l => {
@@ -643,7 +646,10 @@ function parseQuickPaste() {
             notes.push(line);
         } else if (!hasIngHeader) {
             // No "Ingredients" header in text — use heuristics for pre-header lines
-            if (looksLikeIngredient(line)) {
+            if (isSubHeader(line)) {
+                ingredients.push(''); // blank line before sub-header for readability
+                ingredients.push(line);
+            } else if (looksLikeIngredient(line)) {
                 ingredients.push(line);
             } else if (ingredients.length > 0 && line.length < 120 && !line.includes('. ')) {
                 // Continuation of ingredient-like content (e.g. "optional: ..." lines)
