@@ -1,13 +1,10 @@
-const CACHE_NAME = 'recipe-book-v4';
+const CACHE_NAME = 'recipe-book-v5';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
-  '/icon-512.png',
-  '/service-worker.js'
+  '/icon-512.png'
 ];
 
-// Pre-cache all static assets on install
+// Pre-cache static assets on install
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -36,13 +33,29 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Cache-first for static assets — app works fully offline
+  // Network-first for HTML — always get latest version when online
+  if (event.request.mode === 'navigate' || event.request.url.endsWith('.html') || event.request.url.endsWith('/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Cache the fresh copy for offline use
+          const toCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache));
+          return response;
+        })
+        .catch(() => {
+          // Offline — serve cached version
+          return caches.match(event.request).then(cached => cached || caches.match('/index.html'));
+        })
+    );
+    return;
+  }
+
+  // Cache-first for static assets (images, manifest, etc.)
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
-
       return fetch(event.request).then(response => {
-        // Only cache valid same-origin responses
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
@@ -50,9 +63,6 @@ self.addEventListener('fetch', event => {
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache));
         return response;
       });
-    }).catch(() => {
-      // Offline fallback — serve the app shell so IndexedDB recipes still load
-      return caches.match('/index.html');
-    })
+    }).catch(() => caches.match('/index.html'))
   );
 });
