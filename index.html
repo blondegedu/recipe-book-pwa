@@ -550,9 +550,10 @@ function parseQuickPaste() {
 
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // Strip checkbox chars and bullets
+    // Strip checkbox chars, bullets, and numbered prefixes
     const clean = l => l
-        .replace(/^[\u25a2\u2610\u2611\u2612\u25cb\u25cf\u201c\u201d\u2018\u2019"'•*▢☐☑☒]\s*/g, '')
+        .replace(/^[\u25a2\u2610\u2611\u2612\u25cb\u25cf\u201c\u201d\u2018\u2019"'•*▢☐☑☒\-]\s*/g, '')
+        .replace(/^\d+[.)]\s+/, '')
         .trim();
 
     // Section header detection
@@ -565,9 +566,9 @@ function parseQuickPaste() {
                             /^how to(\s*:)?$/i.test(l.trim()) ||
                             /^steps?(\s*:)?$/i.test(l.trim()) ||
                             /^preparation(\s*:)?$/i.test(l.trim());
-    const notesHeader = l => /^notes?(\s*:)?$/i.test(l.trim()) ||
-                             /^tips?(\s*:)?$/i.test(l.trim()) ||
-                             /^cook.?s?\s*notes?/i.test(l.trim());
+    const notesHeader = l => /^notes(\s*:)?$/i.test(l.trim()) ||
+                             /^tips(\s*:)?$/i.test(l.trim()) ||
+                             /^cook.?s?\s*notes/i.test(l.trim());
 
     // Lines to skip — UI junk from recipe sites
     const isJunkLine = l => {
@@ -593,7 +594,7 @@ function parseQuickPaste() {
     const looksLikeIngredient = l => {
         const lower = l.toLowerCase();
         return /^\d|^[\u00bc\u00bd\u00be\u2153\u2154\u2155\u2156\u2157\u2158\u2159\u215a\u215b\u215c\u215d\u215e]/.test(l) ||
-               /\b(cup|cups|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|g |ml|liter|pinch|dash|handful|clove|slice|piece|can|package|pkg)\b/.test(lower);
+               /\b(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|ml|liters?|pinch|dash|handful|cloves?|slices?|pieces?|cans?|packages?|pkg)\b/.test(lower);
     };
 
     // Detect ingredient callout lines some sites put after each instruction step
