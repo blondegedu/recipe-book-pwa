@@ -64,10 +64,8 @@
     <header>
         <h1 onclick="showList()">🍳 Recipe Book</h1>
         <div style="display:flex;gap:8px;">
-            <button class="btn btn-gray" onclick="exportData()" title="Export recipes">⬇️</button>
-            <button class="btn btn-gray" onclick="document.getElementById('importFile').click()" title="Import recipes">⬆️</button>
             <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-            <a href="https://ko-fi.com/yourname" target="_blank" class="btn btn-gray" title="Support" style="text-decoration:none;display:flex;align-items:center;">☕</a>
+            <a href="https://ko-fi.com/teakettleuprising" target="_blank" class="btn btn-gray" title="Support" style="text-decoration:none;display:flex;align-items:center;">☕</a>
             <button class="btn btn-gray" onclick="document.getElementById('settingsModal').classList.add('open')" title="Settings">⚙️</button>
         </div>
     </header>
@@ -150,10 +148,19 @@
         <hr style="margin:20px 0;border-color:#eee;">
         <h3 style="color:#2d5016;margin-bottom:10px;">Data</h3>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <button class="btn" onclick="exportData()">⬇️ Export Recipes</button>
+            <button class="btn" onclick="exportData()">⬇️ Export as JSON</button>
+            <button class="btn" onclick="bulkPrint()">🖨️ Print All Recipes</button>
             <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Import Recipes</button>
         </div>
-        <p style="margin-top:10px;font-size:13px;color:#888;">Export saves all your recipes as a JSON file you can back up or move to another device.</p>
+        <p style="margin-top:10px;font-size:13px;color:#888;">Export saves all your recipes as a JSON file you can back up or move to another device. Print All opens a printable version of every recipe.</p>
+        <hr style="margin:20px 0;border-color:#eee;">
+        <h3 style="color:#2d5016;margin-bottom:10px;">🐛 Bug Report</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:10px;">Something not working right? Let us know!</p>
+        <label>What happened?</label>
+        <textarea id="bugDescription" placeholder="Describe the issue..." style="min-height:100px;"></textarea>
+        <div style="margin-top:10px;">
+            <button class="btn btn-dark" onclick="submitBugReport()">Send Bug Report</button>
+        </div>
     </div>
 </div>
 
@@ -256,7 +263,6 @@ async function showRecipe(id) {
             <div class="actions" id="recipeActions" data-id="${r.id}">
                 <button class="btn" onclick="showList()">← Back</button>
                 <button class="btn btn-dark" onclick="openEditModal(currentRecipeId)">✏️ Edit</button>
-                <button class="btn" onclick="shareRecipe(currentRecipeId)">🔗 Share</button>
                 <button class="btn" onclick="exportPdf(currentRecipeId)">📄 PDF</button>
                 <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
                 ${r.url ? `<button class="btn btn-gray" onclick="window.open('${esc(r.url)}','_blank')">🌐 Original</button>` : ''}
@@ -295,7 +301,7 @@ async function scrapeUrl() {
         });
         const data = await res.json();
         if (!res.ok) {
-            status.innerHTML = `<span style="color:#721c24;">❌ ${data.error} — try Add Manually instead.</span>`;
+            status.innerHTML = `<span style="color:#721c24;">❌ This website doesn't talk to me, but try adding manually instead!</span>`;
         } else {
             const recipe = {
                 id: newId(),
@@ -314,7 +320,7 @@ async function scrapeUrl() {
             renderList();
         }
     } catch(e) {
-        status.innerHTML = `<span style="color:#721c24;">❌ ${e.message}</span>`;
+        status.innerHTML = `<span style="color:#721c24;">❌ This website doesn't talk to me, but try adding manually instead!</span>`;
     }
     btn.disabled = false;
     btn.textContent = 'Add from URL';
@@ -436,7 +442,47 @@ async function printRecipe(id) {
     <script>window.print();<\/script></body></html>`);
 }
 
-// ── Export / Import ────────────────────────────────────────
+// ── Bulk Print ─────────────────────────────────────────────
+async function bulkPrint() {
+    const all = await dbAll();
+    if (!all.length) { toast('No recipes to print'); return; }
+    const w = window.open('', '_blank');
+    const recipesHtml = all.map(r => {
+        const ingHtml = (r.ingredients||[]).map(i=>`<li>${esc(i)}</li>`).join('');
+        const instHtml = (r.instructions||[]).map(i=>`<li>${esc(i)}</li>`).join('');
+        return `
+        <div class="recipe-page">
+            <h1>${esc(r.title)}</h1>
+            <p><strong>Category:</strong> ${esc(r.category||'Other')}</p>
+            <h2>Ingredients</h2><ul>${ingHtml}</ul>
+            <h2>Instructions</h2><ol>${instHtml}</ol>
+            ${r.notes?`<div class="notes"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>`:''}
+        </div>`;
+    }).join('<div class="page-break"></div>');
+    w.document.write(`<!DOCTYPE html><html><head><title>All Recipes</title>
+    <style>
+        body{font-family:Georgia,serif;padding:20px;max-width:800px;margin:0 auto}
+        h1{color:#2d5016;font-size:24px;} h2{color:#2d5016;margin-top:20px;}
+        ul,ol{margin-left:20px} li{padding:5px 0;line-height:1.6}
+        .notes{margin-top:20px;padding:15px;background:#fff9e6;border-radius:4px}
+        .recipe-page{margin-bottom:40px;}
+        .page-break{page-break-after:always;margin:0;}
+        @media print{.page-break{page-break-after:always;}}
+    </style></head><body>${recipesHtml}<script>window.print();<\/script></body></html>`);
+}
+
+// ── Bug Report ─────────────────────────────────────────────
+function submitBugReport() {
+    const desc = document.getElementById('bugDescription').value.trim();
+    if (!desc) { toast('Please describe the issue first'); return; }
+    const subject = encodeURIComponent('Recipe Book Bug Report');
+    const body = encodeURIComponent('Bug Description:\n\n' + desc);
+    window.open(`mailto:sarah@allwhidbeypc.com?subject=${subject}&body=${body}`, '_blank');
+    document.getElementById('bugDescription').value = '';
+    toast('Opening email client...');
+}
+
+
 async function exportData() {
     const all = await dbAll();
     const blob = new Blob([JSON.stringify(all, null, 2)], {type:'application/json'});
