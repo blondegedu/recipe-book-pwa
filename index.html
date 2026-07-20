@@ -522,16 +522,22 @@ async function shareAsHtml(id) {
         }
     }
 
-    // Fallback: download the file
+    // Fallback: open in new tab (works everywhere) and trigger download
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast('Recipe downloaded as HTML — share it with anyone!');
+    const w = window.open(url, '_blank');
+    if (w) {
+        toast('Recipe opened in new tab — use Save As to download!');
+    } else {
+        // Popup blocked — try direct download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast('Recipe downloaded as HTML — share it with anyone!');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // ── Print ──────────────────────────────────────────────────
