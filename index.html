@@ -260,6 +260,23 @@ async function renderList() {
 }
 
 let currentRecipeId = null;
+let wakeLock = null;
+
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => { wakeLock = null; });
+        } catch(e) {} // fails silently if not supported or permission denied
+    }
+}
+
+function releaseWakeLock() {
+    if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
+    }
+}
 
 async function showRecipe(id) {
     currentRecipeId = id;
@@ -270,6 +287,9 @@ async function showRecipe(id) {
     document.getElementById('listView').style.display = 'none';
     const view = document.getElementById('recipeView');
     view.style.display = 'block';
+
+    // Keep screen awake while viewing a recipe
+    requestWakeLock();
 
     const ingHtml = (r.ingredients||[]).map(i => `<li>${esc(i)}</li>`).join('');
     const instHtml = (r.instructions||[]).map(i => `<li>${esc(i)}</li>`).join('');
@@ -297,6 +317,7 @@ async function showRecipe(id) {
 }
 
 function showList() {
+    releaseWakeLock();
     document.getElementById('recipeView').style.display = 'none';
     document.getElementById('listView').style.display = 'block';
     renderList();
@@ -867,6 +888,13 @@ openDB().then(async () => {
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
 }
+
+// Re-acquire wake lock when user returns to the app (e.g. after switching apps)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && currentRecipeId && document.getElementById('recipeView').style.display !== 'none') {
+        requestWakeLock();
+    }
+});
 </script>
 </body>
 </html>
