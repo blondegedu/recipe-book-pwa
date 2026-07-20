@@ -433,6 +433,13 @@ async function shareAsHtml(id) {
     const ingHtml = (r.ingredients||[]).map(i => `<li>${esc(i)}</li>`).join('');
     const instHtml = (r.instructions||[]).map(i => `<li>${esc(i)}</li>`).join('');
 
+    // Create import URL that encodes recipe data for "Save to Recipe Book" button
+    const recipeData = encodeURIComponent(JSON.stringify({
+        title: r.title, category: r.category || 'Other',
+        ingredients: r.ingredients, instructions: r.instructions, notes: r.notes || ''
+    }));
+    const importUrl = `https://recipe-book-pwa.onrender.com/?importData=${recipeData}`;
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -459,6 +466,8 @@ async function shareAsHtml(id) {
                font-weight:bold; text-decoration:none; display:inline-block; }
         .btn-print { background:#f4d03f; color:#333; }
         .btn-print:hover { background:#f1c40f; }
+        .btn-save { background:#2d5016; color:white; }
+        .btn-save:hover { background:#1e3a0f; }
         .footer { margin-top:30px; padding-top:20px; border-top:1px solid #eee; text-align:center; }
         .footer p { color:#888; font-size:14px; margin-bottom:8px; }
         .footer a { color:#2d5016; font-weight:bold; text-decoration:none; }
@@ -473,6 +482,7 @@ async function shareAsHtml(id) {
             <span class="brand">Recipe Book</span>
         </div>
         <div class="actions">
+            <a href="${importUrl}" class="btn btn-save">➕ Save to My Recipe Book</a>
             <button class="btn btn-print" onclick="window.print()">🖨️ Print Recipe</button>
         </div>
         <div class="recipe">
@@ -615,21 +625,42 @@ async function importData(e) {
 // ── Import from share link ─────────────────────────────────
 async function checkImportParam() {
     const params = new URLSearchParams(window.location.search);
+
+    // Import from shared link (server-side)
     const shareId = params.get('import');
-    if (!shareId) return;
-    try {
-        const res = await fetch(`/shared-json/${shareId}`);
-        if (res.ok) {
-            const recipe = await res.json();
+    if (shareId) {
+        try {
+            const res = await fetch(`/shared-json/${shareId}`);
+            if (res.ok) {
+                const recipe = await res.json();
+                recipe.id = newId();
+                recipe.date = new Date().toISOString();
+                recipe.notes = '';
+                await dbPut(recipe);
+                toast('Recipe saved to your book!');
+                window.history.replaceState({}, '', '/');
+                renderList();
+            }
+        } catch {}
+        return;
+    }
+
+    // Import from shared HTML file (encoded in URL)
+    const importData = params.get('importData');
+    if (importData) {
+        try {
+            const recipe = JSON.parse(decodeURIComponent(importData));
             recipe.id = newId();
             recipe.date = new Date().toISOString();
-            recipe.notes = '';
             await dbPut(recipe);
             toast('Recipe saved to your book!');
             window.history.replaceState({}, '', '/');
             renderList();
+        } catch(e) {
+            toast('Could not import recipe');
         }
-    } catch {}
+        return;
+    }
 }
 
 // ── Helpers ────────────────────────────────────────────────
