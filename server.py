@@ -39,7 +39,9 @@ def extract_recipe(url):
 
     # ── 1. JSON-LD ──────────────────────────────────────────
     # First pass: check if any JSON-LD block indicates this is a roundup/blog page
+    # But only flag as roundup if the page has NO recipe content (ingredients/instructions)
     roundup_types = {'BlogPosting', 'Article', 'NewsArticle', 'CollectionPage'}
+    page_is_roundup_candidate = False
     for script in soup.find_all('script', type='application/ld+json'):
         try:
             data = json.loads(script.string)
@@ -56,11 +58,17 @@ def extract_recipe(url):
                     if isinstance(item, dict):
                         page_types.add(item.get('@type', ''))
             if page_types & roundup_types and 'Recipe' not in page_types:
-                raise ValueError('roundup')
-        except ValueError:
-            raise  # re-raise roundup error, don't swallow it
+                page_is_roundup_candidate = True
         except Exception:
             continue
+
+    # Only raise roundup error if page has no recipe-like content
+    if page_is_roundup_candidate:
+        page_text = soup.get_text().lower()
+        has_recipe_content = ('ingredients' in page_text and 'instructions' in page_text) or \
+                             ('ingredients' in page_text and 'directions' in page_text)
+        if not has_recipe_content:
+            raise ValueError('roundup')
 
     # Second pass: extract recipe from JSON-LD
     for script in soup.find_all('script', type='application/ld+json'):
@@ -175,6 +183,16 @@ def extract_recipe(url):
         if items and len(items) > 2:
             instructions = [i.get_text().strip() for i in items if i.get_text().strip()]
             break
+
+    # If we found instructions but no ingredients, look for a <ul> with ingredient-like items
+    if instructions and not ingredients:
+        import re
+        measure_re = re.compile(r'\d|cup|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|ml|liter|pinch|clove|stick', re.I)
+        for ul in soup.find_all('ul'):
+            items = [li.get_text().strip() for li in ul.find_all('li') if li.get_text().strip()]
+            if len(items) >= 2 and sum(1 for it in items if measure_re.search(it)) >= len(items) * 0.5:
+                ingredients = items
+                break
 
     return {'title': title, 'ingredients': ingredients[:30], 'instructions': instructions[:20]}
 
