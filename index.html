@@ -236,7 +236,20 @@ async function renderList() {
 
     const el = document.getElementById('recipeList');
     if (!list.length) {
-        el.innerHTML = '<div class="empty">No recipes yet. Add your first one!</div>';
+        const q = document.getElementById('searchBox').value.trim();
+        if (q) {
+            el.innerHTML = '<div class="empty">No recipes match your search.</div>';
+        } else {
+            el.innerHTML = `<div class="empty" style="padding:40px 20px;">
+                <h2 style="color:#2d5016;margin-bottom:16px;">Welcome to Recipe Book! 🍳</h2>
+                <p style="margin-bottom:20px;line-height:1.7;">Here are a few ways to get started:</p>
+                <div style="text-align:left;max-width:400px;margin:0 auto;line-height:2;">
+                    <p><strong>🔗 Paste a URL</strong> — grab a recipe link from any website and paste it in the box above</p>
+                    <p><strong>📋 Quick Paste</strong> — copy recipe text from Facebook, a message, anywhere — tap "Add Manually" and use Quick Paste to sort it out</p>
+                    <p><strong>✏️ Type it in</strong> — tap "Add Manually" for family recipes or handwritten favorites</p>
+                </div>
+            </div>`;
+        }
         return;
     }
     el.innerHTML = '<div class="recipe-grid">' + list.map(r => `
