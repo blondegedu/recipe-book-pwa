@@ -508,8 +508,9 @@ async function shareAsHtml(id) {
     const fileName = (r.title || 'recipe').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '-') + '.html';
     const file = new File([blob], fileName, { type: 'text/html' });
 
-    // Use Web Share API if available (mobile)
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    // Use Web Share API only on mobile (touch devices)
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
             await navigator.share({
                 title: r.title,
