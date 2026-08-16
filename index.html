@@ -60,7 +60,7 @@
                  background:#2d5016; color:white; padding:12px 24px; border-radius:4px;
                  display:none; z-index:200; font-size:15px; }
         .empty { text-align:center; color:#888; padding:60px 20px; }
-        @media(max-width:600px) { body{padding:10px;} .add-row{flex-direction:column;} .search-row{flex-direction:column;} }
+        @media(max-width:600px) { body{padding:10px;} .add-row{flex-direction:column;} .search-row{flex-direction:column;} .add-box .btn{font-size:13px;padding:10px 8px;} }
     </style>
 </head>
 <body>
@@ -80,9 +80,9 @@
             <div class="add-row">
                 <input type="url" id="urlInput" placeholder="Paste recipe URL to scrape..." onkeydown="if(event.key==='Enter')scrapeUrl()">
             </div>
-            <div style="display:flex;gap:10px;">
-                <button class="btn btn-dark" style="flex:1" onclick="scrapeUrl()" id="scrapeBtn">🔗 Add from URL</button>
-                <button class="btn" style="flex:1" onclick="openAddModal()">✏️ Add Manually</button>
+            <div style="display:flex;gap:8px;width:100%;">
+                <button class="btn btn-dark" style="flex:1;min-width:0;" onclick="scrapeUrl()" id="scrapeBtn">🔗 Add from URL</button>
+                <button class="btn" style="flex:1;min-width:0;" onclick="openAddModal()">✏️ Add Manually</button>
             </div>
             <div id="scrapeStatus" style="margin-top:10px;font-size:14px;"></div>
             <p style="margin-top:10px;font-size:13px;color:#888;">
