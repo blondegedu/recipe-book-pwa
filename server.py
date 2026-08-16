@@ -164,7 +164,45 @@ def extract_recipe(url):
             title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
             return {'title': title, 'ingredients': ings, 'instructions': insts}
 
-    # ── 5. Last resort — generic heuristic ──────────────────
+    # ── 5. Blog-style <br>-separated recipes ────────────────
+    # Common on Blogger/old WordPress sites: recipe is in a block with <br> between lines
+    post_el = soup.select_one('.post-body') or soup.select_one('.entry-content') or soup.select_one('article')
+    if post_el:
+        # Replace <br> with newlines to split content into lines
+        for br in post_el.find_all('br'):
+            br.replace_with('\n')
+        post_text = post_el.get_text()
+        lines = [l.strip() for l in post_text.split('\n') if l.strip()]
+
+        measure_re = re.compile(r'^\d|^[\u00bc\u00bd\u00be\u2153\u2154]|cup|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|ml|liter|pinch|clove|stick', re.I)
+        step_re = re.compile(r'^(\d+)\s+[A-Z]')
+
+        ingredients, instructions = [], []
+        mode = None
+        for line in lines:
+            # Detect numbered instruction steps (e.g. "1 Preheat oven...")
+            if step_re.match(line):
+                mode = 'inst'
+                # Strip the leading number
+                instructions.append(re.sub(r'^\d+\s+', '', line))
+            elif mode == 'inst':
+                # Continuation of instructions (if long enough to be a real step)
+                if len(line) > 30:
+                    instructions.append(line)
+            elif measure_re.search(line) and len(line) < 150:
+                mode = 'ing'
+                ingredients.append(line)
+            elif mode == 'ing' and len(line) < 150 and not step_re.match(line):
+                # Continuation lines in ingredient section (e.g. "Optional: ...")
+                if measure_re.search(line) or line.lower().startswith('optional'):
+                    ingredients.append(line)
+
+        if ingredients and instructions:
+            title_el = soup.select_one('h3') or soup.select_one('h2') or soup.select_one('h1')
+            title = title_el.get_text().strip() if title_el else 'Untitled Recipe'
+            return {'title': title, 'ingredients': ingredients[:30], 'instructions': instructions[:20]}
+
+    # ── 6. Last resort — generic heuristic ──────────────────
     title = 'Untitled Recipe'
     for sel in ['h1.recipe-title', 'h1.headline', 'h1']:
         el = soup.select_one(sel)
@@ -186,7 +224,6 @@ def extract_recipe(url):
 
     # If we found instructions but no ingredients, look for a <ul> with ingredient-like items
     if instructions and not ingredients:
-        import re
         measure_re = re.compile(r'\d|cup|tbsp|tsp|tablespoon|teaspoon|oz|ounce|lb|pound|gram|ml|liter|pinch|clove|stick', re.I)
         for ul in soup.find_all('ul'):
             items = [li.get_text().strip() for li in ul.find_all('li') if li.get_text().strip()]
