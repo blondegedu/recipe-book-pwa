@@ -288,6 +288,9 @@ async function showRecipe(id) {
     const view = document.getElementById('recipeView');
     view.style.display = 'block';
 
+    // Push history state so Android back gesture returns to list
+    history.pushState({view: 'recipe', id: id}, '', '');
+
     // Keep screen awake while viewing a recipe
     requestWakeLock();
 
@@ -318,6 +321,7 @@ async function showRecipe(id) {
 
 function showList() {
     releaseWakeLock();
+    currentRecipeId = null;
     document.getElementById('recipeView').style.display = 'none';
     document.getElementById('listView').style.display = 'block';
     renderList();
@@ -888,6 +892,13 @@ openDB().then(async () => {
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js').catch(()=>{});
 }
+
+// Handle Android back gesture / browser back button
+window.addEventListener('popstate', (e) => {
+    if (document.getElementById('recipeView').style.display !== 'none') {
+        showList();
+    }
+});
 
 // Re-acquire wake lock when user returns to the app (e.g. after switching apps)
 document.addEventListener('visibilitychange', () => {
