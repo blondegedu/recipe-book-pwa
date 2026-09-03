@@ -139,6 +139,14 @@
         <textarea id="editInstructions" style="min-height:160px;"></textarea>
         <label>Notes</label>
         <textarea id="editNotes" style="min-height:80px;"></textarea>
+        <label>Photo</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button type="button" class="btn" onclick="document.getElementById('photoInput').click()">📷 Add Photo</button>
+            <button type="button" class="btn btn-gray" id="removePhotoBtn" onclick="removePhoto()" style="display:none;">Remove Photo</button>
+            <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(event)">
+        </div>
+        <img id="editPhotoPreview" style="display:none;max-width:100%;margin-top:10px;border-radius:6px;" />
+        <input type="hidden" id="editPhoto">
         <label>Source URL</label>
         <input type="url" id="editUrl">
         <div style="display:flex;gap:10px;margin-top:20px;">
@@ -316,6 +324,7 @@ async function showRecipe(id) {
                 <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
                 <button class="btn" onclick="shareAsHtml(currentRecipeId)">📤 Share</button>
             </div>
+            ${r.photo ? `<img src="${r.photo}" style="max-width:100%;border-radius:8px;margin-bottom:16px;" alt="${esc(r.title)}">` : ''}
             <h3>Ingredients</h3>
             <ul>${ingHtml}</ul>
             <h3>Instructions</h3>
@@ -391,6 +400,7 @@ function openAddModal() {
     document.getElementById('editNotes').value = '';
     document.getElementById('editUrl').value = '';
     document.getElementById('cameraTip').style.display = 'none';
+    removePhoto();
     document.getElementById('editModal').classList.add('open');
 }
 
@@ -406,6 +416,15 @@ async function openEditModal(id) {
     document.getElementById('editInstructions').value = (r.instructions||[]).join('\n');
     document.getElementById('editNotes').value = r.notes || '';
     document.getElementById('editUrl').value = r.url || '';
+    // Load existing photo if present
+    if (r.photo) {
+        document.getElementById('editPhoto').value = r.photo;
+        const preview = document.getElementById('editPhotoPreview');
+        preview.src = r.photo; preview.style.display = 'block';
+        document.getElementById('removePhotoBtn').style.display = 'inline-block';
+    } else {
+        removePhoto();
+    }
     document.getElementById('editModal').classList.add('open');
 }
 
@@ -429,6 +448,7 @@ async function saveRecipe() {
         instructions: document.getElementById('editInstructions').value.split('\n').map(s=>s.trim()).filter(Boolean),
         notes: document.getElementById('editNotes').value.trim(),
         url: document.getElementById('editUrl').value.trim(),
+        photo: document.getElementById('editPhoto').value || '',
         date: existing ? existing.date : new Date().toISOString()
     };
 
@@ -603,6 +623,7 @@ async function printRecipe(id) {
     .notes{margin-top:20px;padding:15px;background:#fff9e6;border-radius:4px}
     </style></head><body>
     <h1>${esc(r.title)}</h1><p><strong>Category:</strong> ${esc(r.category||'Other')}</p>
+    ${r.photo?`<img src="${r.photo}" style="max-width:100%;border-radius:6px;margin:10px 0;">`:''}
     <h2>Ingredients</h2><ul>${ingHtml}</ul>
     <h2>Instructions</h2><ol>${instHtml}</ol>
     ${r.notes?`<div class="notes"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>`:''}
@@ -728,6 +749,46 @@ function toast(msg) {
     el.textContent = msg;
     el.style.display = 'block';
     setTimeout(() => el.style.display = 'none', 3000);
+}
+
+// ── Photo handling ─────────────────────────────────────────
+function handlePhoto(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    event.target.value = '';
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+            // Resize to max 1200px on the longest side, compress to JPEG
+            const maxDim = 1200;
+            let { width, height } = img;
+            if (width > height && width > maxDim) {
+                height = Math.round(height * maxDim / width); width = maxDim;
+            } else if (height > maxDim) {
+                width = Math.round(width * maxDim / height); height = maxDim;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            document.getElementById('editPhoto').value = dataUrl;
+            const preview = document.getElementById('editPhotoPreview');
+            preview.src = dataUrl;
+            preview.style.display = 'block';
+            document.getElementById('removePhotoBtn').style.display = 'inline-block';
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function removePhoto() {
+    document.getElementById('editPhoto').value = '';
+    const preview = document.getElementById('editPhotoPreview');
+    preview.src = ''; preview.style.display = 'none';
+    document.getElementById('removePhotoBtn').style.display = 'none';
 }
 
 // ── Quick Paste Parser ─────────────────────────────────────
