@@ -841,11 +841,18 @@ function parseQuickPaste() {
             if (isSubHeader(line)) {
                 ingredients.push(''); // blank line before sub-header for readability
                 ingredients.push(line);
-            } else if (looksLikeIngredient(line)) {
+            } else if (mode === 'inst') {
+                // Once we've switched to instructions, keep collecting prose
+                instructions.push(line);
+            } else if (looksLikeIngredient(line) && instructions.length === 0) {
                 ingredients.push(line);
-            } else if (ingredients.length > 0 && line.length < 120 && !line.includes('. ')) {
-                // Continuation of ingredient-like content (e.g. "optional: ..." lines)
+            } else if (ingredients.length > 0 && line.length < 60 && !line.includes('. ') && instructions.length === 0) {
+                // Short continuation of ingredient content (e.g. "salt and pepper to taste")
                 ingredients.push(line);
+            } else if (ingredients.length > 0 && (line.length >= 60 || /[.!]\s/.test(line))) {
+                // Prose paragraph after ingredients — this is the start of instructions
+                mode = 'inst';
+                instructions.push(line);
             }
         }
         // If hasIngHeader but we haven't reached it yet, skip (it's metadata)
