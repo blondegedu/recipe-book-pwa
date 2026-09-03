@@ -354,11 +354,11 @@ async function showRecipe(id) {
                 <button class="btn btn-dark" onclick="openEditModal(currentRecipeId)">✏️ Edit</button>
                 <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
                 <button class="btn" onclick="shareAsHtml(currentRecipeId)">📤 Share</button>
-                <button class="btn" onclick="openConverter()">🔄 Convert</button>
             </div>
             ${r.photo ? `<img src="${r.photo}" onclick="openLightbox('${r.id}')" style="max-width:100%;border-radius:8px;margin-bottom:16px;cursor:zoom-in;" alt="${esc(r.title)}">` : ''}
             <h3>Ingredients</h3>
             <ul>${ingHtml}</ul>
+            <button class="btn" onclick="openConverter()" style="margin-top:4px;">🔄 Convert Units</button>
             <h3>Instructions</h3>
             <ol>${instHtml}</ol>
             ${r.notes ? `<div class="notes-display"><strong>Notes:</strong><br><br>${esc(r.notes)}</div>` : ''}
