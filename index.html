@@ -740,7 +740,23 @@ function parseQuickPaste() {
     const text = document.getElementById('quickPasteText').value.trim();
     if (!text) return;
 
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    let lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+    // Pre-process: merge bare measurement lines with the following ingredient name.
+    // Handles scanned two-column layouts where "4 tbsp" and "Kecap" are on separate lines.
+    const bareMeasure = l => /^[\d\u00bc\u00bd\u00be\u2153\u2154\/\s.-]+(tbsp|tsp|tablespoons?|teaspoons?|cups?|oz|ounces?|lbs?|pounds?|grams?|g|ml|liters?|cloves?|pinch|dash)\.?$/i.test(l.trim());
+    const merged = [];
+    for (let i = 0; i < lines.length; i++) {
+        if (bareMeasure(lines[i]) && i + 1 < lines.length &&
+            !bareMeasure(lines[i+1]) && lines[i+1].length < 40 &&
+            !/^(sauce|filling|topping|wrappers?|instructions?|directions?|method|note)/i.test(lines[i+1])) {
+            merged.push(lines[i] + ' ' + lines[i+1]);
+            i++; // skip the consumed name line
+        } else {
+            merged.push(lines[i]);
+        }
+    }
+    lines = merged;
 
     // Strip checkbox chars, bullets, and numbered prefixes
     const clean = l => l
@@ -841,6 +857,15 @@ function parseQuickPaste() {
         if (embeddedStep) {
             const stepText = embeddedStep[1].replace(/^\d+\s*[.,)]\s+/, '').trim();
             if (stepText) instructions.push(stepText);
+            continue;
+        }
+
+        // Bare step number with no period (e.g. "8 To make the sauce...") — long prose line
+        // starting with a number followed by a capitalized non-unit word
+        const bareStep = raw.match(/^\d+\s+([A-Z][a-z]+\b.+)/);
+        if (bareStep && raw.length >= 40 && bareStep[1].split(' ').length > 6 &&
+            !/^\d+\s+(tbsp|tsp|tablespoon|teaspoon|cup|oz|ounce|lb|pound|gram|ml|liter|large|medium|small|whole|clove|slice|piece|can|package)/i.test(raw)) {
+            instructions.push(bareStep[1].trim());
             continue;
         }
 
