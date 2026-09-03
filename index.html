@@ -837,9 +837,48 @@ function parseQuickPaste() {
 
     let ingredients = [], instructions = [], notes = [], mode = null;
 
-    // First pass: check if text has an explicit ingredients header
-    let hasIngHeader = false;
-    for (const l of lines) { if (ingHeader(clean(l))) { hasIngHeader = true; break; } }
+    // First pass: check if text has explicit headers
+    let hasIngHeader = false, hasInstHeader = false;
+    for (const l of lines) {
+        const c = clean(l);
+        if (ingHeader(c)) hasIngHeader = true;
+        if (instHeader(c)) hasInstHeader = true;
+    }
+
+    // ── Line classifier: scores a line as ingredient vs instruction ──
+    // Returns 'ing', 'inst', or 'ambiguous'. Used when no explicit headers guide us.
+    const classifyLine = (line) => {
+        const words = line.split(/\s+/).length;
+        const lower = line.toLowerCase();
+
+        // Strong instruction signals
+        const instrVerbs = /\b(preheat|combine|mix|stir|add|bake|cook|heat|melt|whisk|beat|fold|pour|place|remove|bring|reduce|simmer|boil|fry|grill|roast|marinate|sprinkle|cut|slice|chop|drain|serve|garnish|blend|knead|roll|spread|cover|refrigerate|chill|let|allow|transfer|season|drizzle|arrange|dip|coat|grease|line|wrap|set aside|repeat|continue|divide|shape|press|scoop|top with)\b/i;
+        const hasInstrVerb = instrVerbs.test(lower);
+        const hasSentencePunct = /[.!;]\s/.test(line) || /[.!]$/.test(line);
+
+        // Strong ingredient signals
+        const startsWithQty = /^[\d\u00bc-\u215e]/.test(line);
+        const hasMeasure = /\b(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|grams?|ml|liters?|pinch|dash|handful|cloves?|sticks?|cans?|packages?|pkg|quarts?|pints?|gallons?)\b/i.test(lower);
+        const isShort = words <= 8;
+        const toTaste = /to taste$/i.test(line);
+
+        // Instruction: long prose with a cooking verb, or explicit sentence structure
+        if (words > 10 && hasInstrVerb) return 'inst';
+        if (words > 14) return 'inst'; // very long lines are almost always instructions
+        if (hasInstrVerb && hasSentencePunct && words > 6) return 'inst';
+
+        // Ingredient: starts with quantity or has measurement and is short
+        if ((startsWithQty || hasMeasure) && isShort) return 'ing';
+        if (toTaste && isShort) return 'ing';
+
+        // Short line with no verb, no punctuation → likely ingredient
+        if (isShort && !hasInstrVerb && !hasSentencePunct) return 'ing';
+
+        // Medium line with instruction verb → instruction
+        if (hasInstrVerb && words > 8) return 'inst';
+
+        return 'ambiguous';
+    };
 
     for (let i = startIdx; i < lines.length; i++) {
         const raw = lines[i];
@@ -848,24 +887,28 @@ function parseQuickPaste() {
         // This handles cookbook layouts where ingredients & numbered steps are interleaved
         if (isNumberedStep(raw)) {
             const stepText = raw.replace(/^\d+\s*[.,)]\s+/, '').trim();
-            if (stepText) instructions.push(stepText);
-            continue;
+            // Only treat as instruction if it's not actually a numbered ingredient (e.g. "1. 2 cups flour")
+            if (stepText && classifyLine(stepText) !== 'ing') {
+                instructions.push(stepText);
+                if (!hasInstHeader) mode = 'inst';
+                continue;
+            }
         }
 
         // OCR sometimes prepends a page reference to a numbered step (e.g. "Page 190. 2. To make...")
         const embeddedStep = raw.match(/^page\s+\d+\.?\s*(\d+\s*[.,)]\s+.+)/i);
         if (embeddedStep) {
             const stepText = embeddedStep[1].replace(/^\d+\s*[.,)]\s+/, '').trim();
-            if (stepText) instructions.push(stepText);
+            if (stepText) { instructions.push(stepText); if (!hasInstHeader) mode = 'inst'; }
             continue;
         }
 
         // Bare step number with no period (e.g. "8 To make the sauce...") — long prose line
-        // starting with a number followed by a capitalized non-unit word
         const bareStep = raw.match(/^\d+\s+([A-Z][a-z]+\b.+)/);
         if (bareStep && raw.length >= 40 && bareStep[1].split(' ').length > 6 &&
             !/^\d+\s+(tbsp|tsp|tablespoon|teaspoon|cup|oz|ounce|lb|pound|gram|ml|liter|large|medium|small|whole|clove|slice|piece|can|package)/i.test(raw)) {
             instructions.push(bareStep[1].trim());
+            if (!hasInstHeader) mode = 'inst';
             continue;
         }
 
@@ -885,38 +928,47 @@ function parseQuickPaste() {
         // Skip junk lines
         if (isJunkLine(line)) continue;
 
+        // Sub-headers always attach to the current section (ingredients by default)
+        if (isSubHeader(line)) {
+            if (mode === 'inst') { instructions.push(line); }
+            else { if (ingredients.length) ingredients.push(''); ingredients.push(line); if (!mode) mode = 'ing'; }
+            continue;
+        }
+
         if (mode === 'ing') {
-            if (isSubHeader(line)) { ingredients.push(''); ingredients.push(line); }
-            else ingredients.push(line);
+            // In ingredient mode, but detect if we've clearly moved to instructions
+            if (!hasInstHeader && classifyLine(line) === 'inst') {
+                mode = 'inst';
+                instructions.push(line);
+            } else {
+                ingredients.push(line);
+            }
         } else if (mode === 'inst') {
             // Skip ingredient callout lines (e.g. "1 cup butter" or "2 eggs,1 tsp vanilla")
             if (isIngredientCallout(line)) continue;
-            instructions.push(line);
-        } else if (mode === 'notes') {
-            notes.push(line);
-        } else if (!hasIngHeader) {
-            // No "Ingredients" header in text — use heuristics for pre-header lines
-            const looksLikeProse = line.length >= 60 && /[.!]\s/.test(line) && line.split(' ').length > 12;
-            if (isSubHeader(line)) {
-                if (ingredients.length) ingredients.push(''); // blank line before sub-header
+            // In interleaved cookbook layouts, an ingredient can appear after a step.
+            // If a short line clearly classifies as an ingredient, route it back to ingredients.
+            if (!hasInstHeader && classifyLine(line) === 'ing') {
                 ingredients.push(line);
-            } else if (looksLikeProse && ingredients.length > 0) {
-                // Long prose sentence after ingredients — start of instructions
-                // (checked before ingredient heuristic since prose can contain measurement words)
-                mode = 'inst';
-                instructions.push(line);
-            } else if (looksLikeIngredient(line)) {
-                ingredients.push(line);
-            } else if (ingredients.length > 0 && line.length < 60 && !line.includes('. ') && instructions.length === 0) {
-                // Short continuation of ingredient content (e.g. "salt and pepper to taste")
-                ingredients.push(line);
-            } else if (ingredients.length > 0 && (line.length >= 60 || /[.!]\s/.test(line))) {
-                // Prose paragraph after ingredients — start of instructions
-                mode = 'inst';
+            } else {
                 instructions.push(line);
             }
+        } else if (mode === 'notes') {
+            notes.push(line);
+        } else {
+            // No mode set yet (no headers reached) — classify each line
+            const cls = classifyLine(line);
+            if (cls === 'inst' && ingredients.length > 0) {
+                mode = 'inst';
+                instructions.push(line);
+            } else if (cls === 'ing' || cls === 'ambiguous') {
+                ingredients.push(line);
+            } else {
+                // cls === 'inst' but no ingredients yet — could be a headnote; hold as instruction
+                instructions.push(line);
+                mode = 'inst';
+            }
         }
-        // If hasIngHeader but we haven't reached it yet, skip (it's metadata)
     }
 
     // Fallback: if no section headers were found, use heuristics
