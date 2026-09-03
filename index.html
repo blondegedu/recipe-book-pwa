@@ -117,13 +117,7 @@
             <textarea id="quickPasteText" placeholder="Paste full recipe text here..." style="min-height:100px;margin-top:10px;"></textarea>
             <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
                 <button type="button" class="btn btn-dark" onclick="parseQuickPaste()">✨ Parse Recipe</button>
-                <button type="button" class="btn" onclick="toggleCameraTip()">📷 From Camera</button>
-            </div>
-            <div id="cameraTip" style="display:none;margin-top:12px;padding:12px;background:#fff;border-radius:4px;border-left:4px solid #2d5016;font-size:13px;line-height:1.6;color:#444;">
-                <strong style="color:#2d5016;">📷 Adding a recipe from a cookbook or card:</strong><br><br>
-                <strong>On Android:</strong> Open <strong>Google Lens</strong> (or the Google app), point it at the recipe, tap <strong>"Copy text"</strong>, then come back here and paste it into the box above.<br><br>
-                <strong>On iPhone:</strong> Open your <strong>Camera</strong> or <strong>Photos</strong> app, point at the recipe (or open a photo), tap the <strong>Live Text</strong> icon, select the text, tap <strong>Copy</strong>, then paste it here.<br><br>
-                Then tap <strong>✨ Parse Recipe</strong> and we'll sort it into ingredients and instructions for you!
+                <button type="button" class="btn" onclick="document.getElementById('photoInput').click()">📷 Add Photo</button>
             </div>
         </div>
         <label>Title *</label>
@@ -139,13 +133,11 @@
         <textarea id="editInstructions" style="min-height:160px;"></textarea>
         <label>Notes</label>
         <textarea id="editNotes" style="min-height:80px;"></textarea>
-        <label>Photo</label>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button type="button" class="btn" onclick="document.getElementById('photoInput').click()">📷 Add Photo</button>
-            <button type="button" class="btn btn-gray" id="removePhotoBtn" onclick="removePhoto()" style="display:none;">Remove Photo</button>
-            <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(event)">
-        </div>
         <img id="editPhotoPreview" style="display:none;max-width:100%;margin-top:10px;border-radius:6px;" />
+        <div id="photoControls" style="display:none;margin-top:8px;">
+            <button type="button" class="btn btn-gray" id="removePhotoBtn" onclick="removePhoto()">Remove Photo</button>
+        </div>
+        <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhoto(event)">
         <input type="hidden" id="editPhoto">
         <label>Source URL</label>
         <input type="url" id="editUrl">
@@ -399,7 +391,6 @@ function openAddModal() {
     document.getElementById('editInstructions').value = '';
     document.getElementById('editNotes').value = '';
     document.getElementById('editUrl').value = '';
-    document.getElementById('cameraTip').style.display = 'none';
     removePhoto();
     document.getElementById('editModal').classList.add('open');
 }
@@ -421,7 +412,7 @@ async function openEditModal(id) {
         document.getElementById('editPhoto').value = r.photo;
         const preview = document.getElementById('editPhotoPreview');
         preview.src = r.photo; preview.style.display = 'block';
-        document.getElementById('removePhotoBtn').style.display = 'inline-block';
+        document.getElementById('photoControls').style.display = 'block';
     } else {
         removePhoto();
     }
@@ -777,7 +768,7 @@ function handlePhoto(event) {
             const preview = document.getElementById('editPhotoPreview');
             preview.src = dataUrl;
             preview.style.display = 'block';
-            document.getElementById('removePhotoBtn').style.display = 'inline-block';
+            document.getElementById('photoControls').style.display = 'block';
         };
         img.src = e.target.result;
     };
@@ -788,14 +779,10 @@ function removePhoto() {
     document.getElementById('editPhoto').value = '';
     const preview = document.getElementById('editPhotoPreview');
     preview.src = ''; preview.style.display = 'none';
-    document.getElementById('removePhotoBtn').style.display = 'none';
+    document.getElementById('photoControls').style.display = 'none';
 }
 
 // ── Quick Paste Parser ─────────────────────────────────────
-function toggleCameraTip() {
-    const tip = document.getElementById('cameraTip');
-    tip.style.display = tip.style.display === 'none' ? 'block' : 'none';
-}
 
 // Auto-categorize a recipe based on title + ingredients + instructions keywords.
 // Returns one of: Breakfast, Lunch, Dinner, Snack, Dessert, Condiment, Other
