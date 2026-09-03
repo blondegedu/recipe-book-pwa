@@ -836,6 +836,14 @@ function parseQuickPaste() {
             continue;
         }
 
+        // OCR sometimes prepends a page reference to a numbered step (e.g. "Page 190. 2. To make...")
+        const embeddedStep = raw.match(/^page\s+\d+\.?\s*(\d+\s*[.,)]\s+.+)/i);
+        if (embeddedStep) {
+            const stepText = embeddedStep[1].replace(/^\d+\s*[.,)]\s+/, '').trim();
+            if (stepText) instructions.push(stepText);
+            continue;
+        }
+
         const line = clean(raw);
         if (!line) continue;
 
