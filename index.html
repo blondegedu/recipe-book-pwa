@@ -185,6 +185,40 @@
     <img id="lightboxImg" style="max-width:100%;max-height:100%;border-radius:6px;" />
 </div>
 
+<!-- Unit converter modal -->
+<div class="modal-bg" id="converterModal">
+    <div class="modal" style="max-width:420px;">
+        <h2>🔄 Quick Convert</h2>
+        <label>Amount</label>
+        <input type="number" id="convAmount" value="1" step="any" oninput="doConvert()">
+        <label>From</label>
+        <select id="convFrom" onchange="doConvert()"></select>
+        <label>To</label>
+        <select id="convTo" onchange="doConvert()"></select>
+        <label>Ingredient (for weight ↔ volume)</label>
+        <select id="convIngredient" onchange="doConvert()">
+            <option value="water">Water / liquid</option>
+            <option value="flour">Flour (all-purpose)</option>
+            <option value="sugar">Sugar (granulated)</option>
+            <option value="brown_sugar">Brown sugar (packed)</option>
+            <option value="powdered_sugar">Powdered sugar</option>
+            <option value="butter">Butter</option>
+            <option value="milk">Milk</option>
+            <option value="honey">Honey</option>
+            <option value="oil">Oil</option>
+            <option value="salt">Salt (table)</option>
+            <option value="rice">Rice (uncooked)</option>
+            <option value="cocoa">Cocoa powder</option>
+            <option value="oats">Rolled oats</option>
+        </select>
+        <div id="convResult" style="margin-top:20px;padding:16px;background:#fff9e6;border-radius:6px;border-left:4px solid #f4d03f;font-size:20px;color:#2d5016;font-weight:bold;text-align:center;"></div>
+        <div id="convNote" style="margin-top:8px;font-size:12px;color:#888;"></div>
+        <div style="display:flex;gap:10px;margin-top:20px;">
+            <button class="btn btn-gray" onclick="document.getElementById('converterModal').classList.remove('open')">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ── IndexedDB ──────────────────────────────────────────────
 const DB_NAME = 'recipebook', DB_VER = 1, STORE = 'recipes';
@@ -320,6 +354,7 @@ async function showRecipe(id) {
                 <button class="btn btn-dark" onclick="openEditModal(currentRecipeId)">✏️ Edit</button>
                 <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
                 <button class="btn" onclick="shareAsHtml(currentRecipeId)">📤 Share</button>
+                <button class="btn" onclick="openConverter()">🔄 Convert</button>
             </div>
             ${r.photo ? `<img src="${r.photo}" onclick="openLightbox('${r.id}')" style="max-width:100%;border-radius:8px;margin-bottom:16px;cursor:zoom-in;" alt="${esc(r.title)}">` : ''}
             <h3>Ingredients</h3>
@@ -798,6 +833,90 @@ async function openLightbox(id) {
 function closeLightbox() {
     document.getElementById('lightbox').style.display = 'none';
     document.getElementById('lightboxImg').src = '';
+}
+
+// ── Unit Converter ─────────────────────────────────────────
+// All volume units expressed in milliliters; all weight units in grams.
+const CONV_UNITS = {
+    // Volume (base: ml)
+    'tsp':    { type: 'vol', ml: 4.92892, label: 'teaspoons' },
+    'tbsp':   { type: 'vol', ml: 14.7868, label: 'tablespoons' },
+    'fl oz':  { type: 'vol', ml: 29.5735, label: 'fluid ounces' },
+    'cup':    { type: 'vol', ml: 236.588, label: 'cups' },
+    'pint':   { type: 'vol', ml: 473.176, label: 'pints' },
+    'quart':  { type: 'vol', ml: 946.353, label: 'quarts' },
+    'ml':     { type: 'vol', ml: 1, label: 'milliliters' },
+    'liter':  { type: 'vol', ml: 1000, label: 'liters' },
+    // Weight (base: g)
+    'g':      { type: 'wt', g: 1, label: 'grams' },
+    'oz':     { type: 'wt', g: 28.3495, label: 'ounces' },
+    'lb':     { type: 'wt', g: 453.592, label: 'pounds' },
+    'kg':     { type: 'wt', g: 1000, label: 'kilograms' },
+};
+
+// Ingredient densities in grams per milliliter (g/ml)
+const DENSITIES = {
+    water: 1.0, flour: 0.53, sugar: 0.85, brown_sugar: 0.93, powdered_sugar: 0.56,
+    butter: 0.911, milk: 1.03, honey: 1.42, oil: 0.92, salt: 1.22, rice: 0.85,
+    cocoa: 0.53, oats: 0.41,
+};
+
+function openConverter() {
+    const fromSel = document.getElementById('convFrom');
+    const toSel = document.getElementById('convTo');
+    if (!fromSel.options.length) {
+        const opts = Object.keys(CONV_UNITS).map(u => `<option value="${u}">${u} (${CONV_UNITS[u].label})</option>`).join('');
+        fromSel.innerHTML = opts;
+        toSel.innerHTML = opts;
+        fromSel.value = 'g';
+        toSel.value = 'cup';
+    }
+    document.getElementById('converterModal').classList.add('open');
+    doConvert();
+}
+
+function doConvert() {
+    const amount = parseFloat(document.getElementById('convAmount').value);
+    const from = document.getElementById('convFrom').value;
+    const to = document.getElementById('convTo').value;
+    const ingredient = document.getElementById('convIngredient').value;
+    const resultEl = document.getElementById('convResult');
+    const noteEl = document.getElementById('convNote');
+
+    if (isNaN(amount)) { resultEl.textContent = '—'; noteEl.textContent = ''; return; }
+
+    const uFrom = CONV_UNITS[from], uTo = CONV_UNITS[to];
+    const density = DENSITIES[ingredient]; // g per ml
+    let result, note = '';
+
+    if (uFrom.type === uTo.type) {
+        // Same type — pure conversion
+        if (uFrom.type === 'vol') {
+            result = amount * uFrom.ml / uTo.ml;
+        } else {
+            result = amount * uFrom.g / uTo.g;
+        }
+    } else {
+        // Cross type (weight ↔ volume) — needs density
+        if (uFrom.type === 'wt') {
+            // weight → volume: grams → ml → target volume
+            const grams = amount * uFrom.g;
+            const ml = grams / density;
+            result = ml / uTo.ml;
+        } else {
+            // volume → weight
+            const ml = amount * uFrom.ml;
+            const grams = ml * density;
+            result = grams / uTo.g;
+        }
+        const ingName = document.getElementById('convIngredient').selectedOptions[0].textContent;
+        note = `Weight ↔ volume uses the density of ${ingName.toLowerCase()}. Results are approximate.`;
+    }
+
+    // Format nicely
+    const rounded = result >= 10 ? result.toFixed(1) : result.toFixed(2);
+    resultEl.textContent = `${parseFloat(rounded)} ${to}`;
+    noteEl.textContent = note;
 }
 
 // ── Quick Paste Parser ─────────────────────────────────────
