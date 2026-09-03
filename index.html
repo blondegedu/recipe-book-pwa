@@ -360,7 +360,7 @@ async function scrapeUrl() {
             const recipe = {
                 id: newId(),
                 title: data.title,
-                category: 'Other',
+                category: guessCategory(data.title, data.ingredients, data.instructions),
                 ingredients: data.ingredients,
                 instructions: data.instructions,
                 notes: '',
@@ -736,6 +736,59 @@ function toggleCameraTip() {
     tip.style.display = tip.style.display === 'none' ? 'block' : 'none';
 }
 
+// Auto-categorize a recipe based on title + ingredients + instructions keywords.
+// Returns one of: Breakfast, Lunch, Dinner, Snack, Dessert, Condiment, Other
+function guessCategory(title, ingredients, instructions) {
+    const text = ((title || '') + ' ' + (ingredients || []).join(' ') + ' ' + (instructions || []).join(' ')).toLowerCase();
+    const has = (words) => words.some(w => new RegExp('\\b' + w + '\\b', 'i').test(text));
+
+    // Dessert — strong signals
+    if (has(['cake', 'cookie', 'cookies', 'brownie', 'brownies', 'pie', 'tart', 'cheesecake',
+             'frosting', 'icing', 'cupcake', 'cupcakes', 'pudding', 'custard', 'ice cream',
+             'sorbet', 'fudge', 'candy', 'truffle', 'macaron', 'meringue', 'scone', 'scones',
+             'shortbread', 'cobbler', 'crumble', 'mousse', 'donut', 'doughnut', 'churro',
+             'banana bread', 'zucchini bread', 'pumpkin bread', 'quick bread', 'sweet bread'])) {
+        return 'Dessert';
+    }
+
+    // Lunch — sandwiches/salads/wraps (check before Dinner so "turkey sandwich" → Lunch)
+    if (has(['sandwich', 'salad', 'wrap', 'quesadilla', 'panini', 'sub'])) {
+        return 'Lunch';
+    }
+
+    // Condiment / sauce / dressing (only if not clearly a main dish)
+    if (has(['sauce', 'dressing', 'jam', 'jelly', 'relish', 'marinade', 'chutney', 'salsa',
+             'spread', 'vinaigrette', 'pesto', 'aioli', 'ketchup', 'mustard',
+             'seasoning', 'tzatziki', 'guacamole'])) {
+        if (!has(['chicken', 'beef', 'pork', 'fish', 'pasta', 'rice', 'noodle', 'noodles', 'steak', 'shrimp'])) {
+            return 'Condiment';
+        }
+    }
+
+    // Breakfast
+    if (has(['pancake', 'pancakes', 'waffle', 'waffles', 'oatmeal', 'granola', 'muffin', 'muffins',
+             'omelet', 'omelette', 'french toast', 'breakfast', 'cereal', 'porridge', 'bagel',
+             'scramble', 'frittata', 'hash brown', 'crepe', 'crepes'])) {
+        return 'Breakfast';
+    }
+
+    // Snack / appetizer
+    if (has(['snack', 'appetizer', 'chips', 'crackers', 'popcorn', 'trail mix', 'energy bar',
+             'granola bar', 'nachos', 'pretzel', 'hummus', 'dip'])) {
+        return 'Snack';
+    }
+
+    // Dinner — savory mains
+    if (has(['chicken', 'beef', 'pork', 'lamb', 'turkey', 'fish', 'salmon', 'shrimp', 'steak',
+             'roast', 'pasta', 'lasagna', 'curry', 'stew', 'soup', 'chili', 'casserole',
+             'meatloaf', 'ravioli', 'risotto', 'stir fry', 'stir-fry', 'taco', 'tacos', 'burger',
+             'noodle', 'noodles', 'rice', 'pizza', 'piroshki', 'dumpling', 'dumplings'])) {
+        return 'Dinner';
+    }
+
+    return 'Other';
+}
+
 function parseQuickPaste() {
     const text = document.getElementById('quickPasteText').value.trim();
     if (!text) return;
@@ -992,6 +1045,12 @@ function parseQuickPaste() {
     document.getElementById('editTitleInput').value = title;
     document.getElementById('editIngredients').value = ingredients.join('\n');
     document.getElementById('editInstructions').value = instructions.join('\n');
+
+    // Auto-categorize only if still set to "Other"
+    const catField = document.getElementById('editCategory');
+    if (catField && catField.value === 'Other') {
+        catField.value = guessCategory(title, ingredients, instructions);
+    }
     const notesField = document.getElementById('editNotes');
     if (notesField && notes.length) {
         notesField.value = notes.join('\n');
