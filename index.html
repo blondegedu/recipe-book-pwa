@@ -115,7 +115,16 @@
         <div style="background:#fff9e6;border:2px dashed #f4d03f;border-radius:4px;padding:15px;margin-bottom:15px;">
             <strong style="color:#2d5016;">Quick Paste</strong> — copy a recipe from Facebook, a website, anywhere, and paste it here:
             <textarea id="quickPasteText" placeholder="Paste full recipe text here..." style="min-height:100px;margin-top:10px;"></textarea>
-            <button type="button" class="btn btn-dark" onclick="parseQuickPaste()" style="margin-top:8px;">✨ Parse Recipe</button>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-dark" onclick="parseQuickPaste()">✨ Parse Recipe</button>
+                <button type="button" class="btn" onclick="toggleCameraTip()">📷 From Camera</button>
+            </div>
+            <div id="cameraTip" style="display:none;margin-top:12px;padding:12px;background:#fff;border-radius:4px;border-left:4px solid #2d5016;font-size:13px;line-height:1.6;color:#444;">
+                <strong style="color:#2d5016;">📷 Adding a recipe from a cookbook or card:</strong><br><br>
+                <strong>On Android:</strong> Open <strong>Google Lens</strong> (or the Google app), point it at the recipe, tap <strong>"Copy text"</strong>, then come back here and paste it into the box above.<br><br>
+                <strong>On iPhone:</strong> Open your <strong>Camera</strong> or <strong>Photos</strong> app, point at the recipe (or open a photo), tap the <strong>Live Text</strong> icon, select the text, tap <strong>Copy</strong>, then paste it here.<br><br>
+                Then tap <strong>✨ Parse Recipe</strong> and we'll sort it into ingredients and instructions for you!
+            </div>
         </div>
         <label>Title *</label>
         <input type="text" id="editTitleInput">
@@ -381,6 +390,7 @@ function openAddModal() {
     document.getElementById('editInstructions').value = '';
     document.getElementById('editNotes').value = '';
     document.getElementById('editUrl').value = '';
+    document.getElementById('cameraTip').style.display = 'none';
     document.getElementById('editModal').classList.add('open');
 }
 
@@ -721,6 +731,11 @@ function toast(msg) {
 }
 
 // ── Quick Paste Parser ─────────────────────────────────────
+function toggleCameraTip() {
+    const tip = document.getElementById('cameraTip');
+    tip.style.display = tip.style.display === 'none' ? 'block' : 'none';
+}
+
 function parseQuickPaste() {
     const text = document.getElementById('quickPasteText').value.trim();
     if (!text) return;
