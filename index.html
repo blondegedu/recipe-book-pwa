@@ -761,9 +761,18 @@ function parseQuickPaste() {
     const notesHeader = l => /^notes(\s*:)?$/i.test(l.trim()) ||
                              /^tips(\s*:)?$/i.test(l.trim()) ||
                              /^cook.?s?\s*notes/i.test(l.trim());
-    // Sub-section headers (e.g. "For the frosting:", "For the dressing:")
-    const isSubHeader = l => /^for (the|your)\s+.+:$/i.test(l.trim()) ||
-                             /^(frosting|glaze|sauce|dressing|filling|topping|crust|marinade|garnish|batter|dough|icing|syrup|drizzle|assembly|to serve)\s*:$/i.test(l.trim());
+    // Sub-section headers (e.g. "For the frosting:", "For the dressing:", "FILLING")
+    const subWords = 'frosting|glaze|sauce|dressing|filling|topping|crust|marinade|garnish|batter|dough|icing|syrup|drizzle|assembly|to serve|wrappers?|crumble|streusel|coating';
+    const isSubHeader = l => {
+        const t = l.trim();
+        return /^for (the|your)\s+.+:?$/i.test(t) ||
+               new RegExp('^(' + subWords + ')\\s*:$', 'i').test(t) ||
+               // All-caps single/double word component headers (e.g. FILLING, WRAPPERS)
+               (/^[A-Z][A-Z\s]{2,20}$/.test(t) && new RegExp('^(' + subWords + ')$', 'i').test(t.replace(/\s+/g,'')));
+    };
+
+    // Numbered instruction step (e.g. "1.", "2,", "3." — OCR sometimes reads period as comma)
+    const isNumberedStep = l => /^\d+\s*[.,)]\s+\S/.test(l.trim());
 
     // Lines to skip — UI junk from recipe sites
     const isJunkLine = l => {
@@ -818,6 +827,15 @@ function parseQuickPaste() {
 
     for (let i = startIdx; i < lines.length; i++) {
         const raw = lines[i];
+
+        // Check raw line for numbered instruction steps BEFORE cleaning strips the number
+        // This handles cookbook layouts where ingredients & numbered steps are interleaved
+        if (isNumberedStep(raw)) {
+            const stepText = raw.replace(/^\d+\s*[.,)]\s+/, '').trim();
+            if (stepText) instructions.push(stepText);
+            continue;
+        }
+
         const line = clean(raw);
         if (!line) continue;
 
@@ -825,11 +843,18 @@ function parseQuickPaste() {
         if (instHeader(line)) { mode = 'inst'; continue; }
         if (notesHeader(line)) { mode = 'notes'; continue; }
 
+        // Inline NOTE: lines (common in cookbooks) go to notes regardless of mode
+        if (/^note\s*:/i.test(line)) {
+            notes.push(line.replace(/^note\s*:\s*/i, ''));
+            continue;
+        }
+
         // Skip junk lines
         if (isJunkLine(line)) continue;
 
         if (mode === 'ing') {
-            ingredients.push(line);
+            if (isSubHeader(line)) { ingredients.push(''); ingredients.push(line); }
+            else ingredients.push(line);
         } else if (mode === 'inst') {
             // Skip ingredient callout lines (e.g. "1 cup butter" or "2 eggs,1 tsp vanilla")
             if (isIngredientCallout(line)) continue;
@@ -839,18 +864,15 @@ function parseQuickPaste() {
         } else if (!hasIngHeader) {
             // No "Ingredients" header in text — use heuristics for pre-header lines
             if (isSubHeader(line)) {
-                ingredients.push(''); // blank line before sub-header for readability
+                if (ingredients.length) ingredients.push(''); // blank line before sub-header
                 ingredients.push(line);
-            } else if (mode === 'inst') {
-                // Once we've switched to instructions, keep collecting prose
-                instructions.push(line);
-            } else if (looksLikeIngredient(line) && instructions.length === 0) {
+            } else if (looksLikeIngredient(line)) {
                 ingredients.push(line);
             } else if (ingredients.length > 0 && line.length < 60 && !line.includes('. ') && instructions.length === 0) {
                 // Short continuation of ingredient content (e.g. "salt and pepper to taste")
                 ingredients.push(line);
             } else if (ingredients.length > 0 && (line.length >= 60 || /[.!]\s/.test(line))) {
-                // Prose paragraph after ingredients — this is the start of instructions
+                // Prose paragraph after ingredients — start of instructions
                 mode = 'inst';
                 instructions.push(line);
             }
