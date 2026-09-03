@@ -863,9 +863,15 @@ function parseQuickPaste() {
             notes.push(line);
         } else if (!hasIngHeader) {
             // No "Ingredients" header in text — use heuristics for pre-header lines
+            const looksLikeProse = line.length >= 60 && /[.!]\s/.test(line) && line.split(' ').length > 12;
             if (isSubHeader(line)) {
                 if (ingredients.length) ingredients.push(''); // blank line before sub-header
                 ingredients.push(line);
+            } else if (looksLikeProse && ingredients.length > 0) {
+                // Long prose sentence after ingredients — start of instructions
+                // (checked before ingredient heuristic since prose can contain measurement words)
+                mode = 'inst';
+                instructions.push(line);
             } else if (looksLikeIngredient(line)) {
                 ingredients.push(line);
             } else if (ingredients.length > 0 && line.length < 60 && !line.includes('. ') && instructions.length === 0) {
