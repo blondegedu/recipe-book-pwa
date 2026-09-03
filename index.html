@@ -180,6 +180,11 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Photo lightbox -->
+<div id="lightbox" onclick="closeLightbox()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:300;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;">
+    <img id="lightboxImg" style="max-width:100%;max-height:100%;border-radius:6px;" />
+</div>
+
 <script>
 // ── IndexedDB ──────────────────────────────────────────────
 const DB_NAME = 'recipebook', DB_VER = 1, STORE = 'recipes';
@@ -316,7 +321,7 @@ async function showRecipe(id) {
                 <button class="btn" onclick="printRecipe(currentRecipeId)">🖨️ Print</button>
                 <button class="btn" onclick="shareAsHtml(currentRecipeId)">📤 Share</button>
             </div>
-            ${r.photo ? `<img src="${r.photo}" style="max-width:100%;border-radius:8px;margin-bottom:16px;" alt="${esc(r.title)}">` : ''}
+            ${r.photo ? `<img src="${r.photo}" onclick="openLightbox('${r.id}')" style="max-width:100%;border-radius:8px;margin-bottom:16px;cursor:zoom-in;" alt="${esc(r.title)}">` : ''}
             <h3>Ingredients</h3>
             <ul>${ingHtml}</ul>
             <h3>Instructions</h3>
@@ -780,6 +785,19 @@ function removePhoto() {
     const preview = document.getElementById('editPhotoPreview');
     preview.src = ''; preview.style.display = 'none';
     document.getElementById('photoControls').style.display = 'none';
+}
+
+async function openLightbox(id) {
+    const all = await dbAll();
+    const r = all.find(x => x.id === id);
+    if (!r || !r.photo) return;
+    document.getElementById('lightboxImg').src = r.photo;
+    document.getElementById('lightbox').style.display = 'flex';
+}
+
+function closeLightbox() {
+    document.getElementById('lightbox').style.display = 'none';
+    document.getElementById('lightboxImg').src = '';
 }
 
 // ── Quick Paste Parser ─────────────────────────────────────
