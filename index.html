@@ -166,6 +166,10 @@
             <button class="btn" onclick="document.getElementById('importFile').click()">⬆️ Import Recipes</button>
         </div>
         <p style="margin-top:10px;font-size:13px;color:#888;">Export saves all your recipes as a JSON file you can back up or move to another device. Print All opens a printable version of every recipe.</p>
+        <hr style="margin:20px 0;border-color:#eee;">
+        <h3 style="color:#2d5016;margin-bottom:10px;">⭐ Enjoying Recipe Book?</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:10px;">Reviews help other home cooks discover the app!</p>
+        <button class="btn btn-dark" onclick="rateApp()">⭐ Rate on Google Play</button>
         <div style="margin-top:15px;font-size:12px;color:#bbb;text-align:center;">Version 9</div>
         <hr style="margin:20px 0;border-color:#eee;">
         <h3 style="color:#2d5016;margin-bottom:10px;">🐛 Bug Report</h3>
@@ -174,6 +178,19 @@
         <textarea id="bugDescription" placeholder="Describe the issue..." style="min-height:100px;"></textarea>
         <div style="margin-top:10px;">
             <button class="btn btn-dark" onclick="submitBugReport()">Send Bug Report</button>
+        </div>
+    </div>
+</div>
+
+<!-- Review prompt -->
+<div class="modal-bg" id="reviewModal">
+    <div class="modal" style="max-width:400px;text-align:center;">
+        <div style="font-size:40px;margin-bottom:10px;">⭐</div>
+        <h2 style="justify-content:center;">Enjoying Recipe Book?</h2>
+        <p style="color:#555;margin:12px 0 20px;line-height:1.6;">If Recipe Book has been helpful, a quick rating on Google Play helps other home cooks find it. It only takes a moment!</p>
+        <div style="display:flex;gap:10px;flex-direction:column;">
+            <button class="btn btn-dark" onclick="rateApp(); dismissReviewPrompt();">⭐ Rate on Google Play</button>
+            <button class="btn btn-gray" onclick="dismissReviewPrompt()">Maybe Later</button>
         </div>
     </div>
 </div>
@@ -1261,11 +1278,46 @@ function saveSettings() {
     toast('Settings saved!');
 }
 
+// ── Review prompt ──────────────────────────────────────────
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.teakettleuprising.recipebook';
+
+function rateApp() {
+    // Close settings if open, mark as reviewed so the prompt never shows again
+    document.getElementById('settingsModal').classList.remove('open');
+    localStorage.setItem('reviewPromptDone', '1');
+    window.open(PLAY_STORE_URL, '_blank');
+}
+
+function dismissReviewPrompt() {
+    localStorage.setItem('reviewPromptDone', '1');
+    document.getElementById('reviewModal').classList.remove('open');
+}
+
+// Show the one-time prompt once the user has shown engagement
+// (opened the app a few times AND has at least 3 recipes saved)
+async function maybeShowReviewPrompt() {
+    if (localStorage.getItem('reviewPromptDone')) return;
+
+    // Count app opens
+    let opens = parseInt(localStorage.getItem('appOpens') || '0', 10) + 1;
+    localStorage.setItem('appOpens', String(opens));
+
+    // Only prompt after 3+ opens and 3+ saved recipes (signs of real use)
+    if (opens < 3) return;
+    try {
+        const all = await dbAll();
+        if (all.length >= 3) {
+            setTimeout(() => document.getElementById('reviewModal').classList.add('open'), 1500);
+        }
+    } catch {}
+}
+
 // ── Init ───────────────────────────────────────────────────
 openDB().then(async () => {
     loadSettings();
     await checkImportParam();
     renderList();
+    maybeShowReviewPrompt();
 });
 
 if ('serviceWorker' in navigator) {
